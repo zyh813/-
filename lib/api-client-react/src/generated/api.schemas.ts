@@ -8,3 +8,99 @@
 export interface HealthStatus {
   status: string;
 }
+
+export interface ErrorResponse {
+  error: string;
+}
+
+export interface MessageResponse {
+  message: string;
+}
+
+export interface ProxyEntry {
+  id: string;
+  url: string;
+  protocol: string;
+  label?: string | null;
+  addedAt: string;
+  lastUsedAt?: string | null;
+  lastCheckedAt?: string | null;
+  successCount: number;
+  failureCount: number;
+  consecutiveFails: number;
+  alive: boolean;
+  latencyMs?: number | null;
+}
+
+export interface PoolStats {
+  total: number;
+  alive: number;
+  dead: number;
+}
+
+export interface ProxyListResponse {
+  stats: PoolStats;
+  proxies: ProxyEntry[];
+}
+
+export interface CheckResultEntry {
+  id?: string;
+  url?: string;
+  alive?: boolean;
+  latencyMs?: number | null;
+  error?: string | null;
+}
+
+export interface CheckAllResponse {
+  total: number;
+  stats: PoolStats;
+  results: CheckResultEntry[];
+}
+
+export interface SchedulerStatus {
+  enabled: boolean;
+  intervalMs: number;
+  intervalMinutes: number;
+  testUrl: string;
+  lastRunAt?: string | null;
+  nextRunAt?: string | null;
+  runCount: number;
+}
+
+export interface SchedulerActionResponse {
+  message: string;
+  status: SchedulerStatus;
+}
+
+export type AddProxiesBodyUrlsItem = {
+  url?: string;
+  label?: string;
+};
+
+export type AddProxiesBody = {
+  url?: string;
+  label?: string;
+  urls?: AddProxiesBodyUrlsItem[];
+};
+
+export type AddProxies201 = { [key: string]: unknown };
+
+export type CheckAllProxiesBody = {
+  testUrl?: string;
+};
+
+export type StartSchedulerBody = {
+  intervalMinutes?: number;
+  testUrl?: string;
+};
+
+export type CheckProxyBody = {
+  testUrl?: string;
+};
+
+export type CheckProxy200 = {
+  alive: boolean;
+  latencyMs?: number | null;
+  statusCode?: number | null;
+  error?: string | null;
+};

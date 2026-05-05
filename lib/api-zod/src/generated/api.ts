@@ -8,9 +8,178 @@
 import * as zod from "zod";
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const HealthCheckResponse = zod.object({
   status: zod.string(),
+});
+
+/**
+ * @summary List all proxies and pool stats
+ */
+export const ListProxiesResponse = zod.object({
+  stats: zod.object({
+    total: zod.number(),
+    alive: zod.number(),
+    dead: zod.number(),
+  }),
+  proxies: zod.array(
+    zod.object({
+      id: zod.string(),
+      url: zod.string(),
+      protocol: zod.string(),
+      label: zod.string().nullish(),
+      addedAt: zod.string(),
+      lastUsedAt: zod.string().nullish(),
+      lastCheckedAt: zod.string().nullish(),
+      successCount: zod.number(),
+      failureCount: zod.number(),
+      consecutiveFails: zod.number(),
+      alive: zod.boolean(),
+      latencyMs: zod.number().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Add one or multiple proxies
+ */
+export const AddProxiesBody = zod.object({
+  url: zod.string().optional(),
+  label: zod.string().optional(),
+  urls: zod
+    .array(
+      zod.object({
+        url: zod.string().optional(),
+        label: zod.string().optional(),
+      }),
+    )
+    .optional(),
+});
+
+/**
+ * @summary Clear all proxies
+ */
+export const ClearProxiesResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Check health of all proxies
+ */
+export const CheckAllProxiesBody = zod.object({
+  testUrl: zod.string().optional(),
+});
+
+export const CheckAllProxiesResponse = zod.object({
+  total: zod.number(),
+  stats: zod.object({
+    total: zod.number(),
+    alive: zod.number(),
+    dead: zod.number(),
+  }),
+  results: zod.array(
+    zod.object({
+      id: zod.string().optional(),
+      url: zod.string().optional(),
+      alive: zod.boolean().optional(),
+      latencyMs: zod.number().nullish(),
+      error: zod.string().nullish(),
+    }),
+  ),
+});
+
+/**
+ * @summary Get scheduler status
+ */
+export const GetSchedulerStatusResponse = zod.object({
+  enabled: zod.boolean(),
+  intervalMs: zod.number(),
+  intervalMinutes: zod.number(),
+  testUrl: zod.string(),
+  lastRunAt: zod.string().nullish(),
+  nextRunAt: zod.string().nullish(),
+  runCount: zod.number(),
+});
+
+/**
+ * @summary Start or reconfigure the scheduler
+ */
+export const StartSchedulerBody = zod.object({
+  intervalMinutes: zod.number().optional(),
+  testUrl: zod.string().optional(),
+});
+
+export const StartSchedulerResponse = zod.object({
+  message: zod.string(),
+  status: zod.object({
+    enabled: zod.boolean(),
+    intervalMs: zod.number(),
+    intervalMinutes: zod.number(),
+    testUrl: zod.string(),
+    lastRunAt: zod.string().nullish(),
+    nextRunAt: zod.string().nullish(),
+    runCount: zod.number(),
+  }),
+});
+
+/**
+ * @summary Stop the scheduler
+ */
+export const StopSchedulerResponse = zod.object({
+  message: zod.string(),
+  status: zod.object({
+    enabled: zod.boolean(),
+    intervalMs: zod.number(),
+    intervalMinutes: zod.number(),
+    testUrl: zod.string(),
+    lastRunAt: zod.string().nullish(),
+    nextRunAt: zod.string().nullish(),
+    runCount: zod.number(),
+  }),
+});
+
+/**
+ * @summary Manually trigger health check
+ */
+export const RunSchedulerNowResponse = zod.object({
+  message: zod.string(),
+  status: zod.object({
+    enabled: zod.boolean(),
+    intervalMs: zod.number(),
+    intervalMinutes: zod.number(),
+    testUrl: zod.string(),
+    lastRunAt: zod.string().nullish(),
+    nextRunAt: zod.string().nullish(),
+    runCount: zod.number(),
+  }),
+});
+
+/**
+ * @summary Delete a proxy by ID
+ */
+export const DeleteProxyParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const DeleteProxyResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Check health of a single proxy
+ */
+export const CheckProxyParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const CheckProxyBody = zod.object({
+  testUrl: zod.string().optional(),
+});
+
+export const CheckProxyResponse = zod.object({
+  alive: zod.boolean(),
+  latencyMs: zod.number().nullish(),
+  statusCode: zod.number().nullish(),
+  error: zod.string().nullish(),
 });

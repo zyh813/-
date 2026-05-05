@@ -5,18 +5,35 @@
  * API specification
  * OpenAPI spec version: 0.1.0
  */
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import type {
+  MutationFunction,
   QueryFunction,
   QueryKey,
+  UseMutationOptions,
+  UseMutationResult,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
-import type { HealthStatus } from "./api.schemas";
+import type {
+  AddProxies201,
+  AddProxiesBody,
+  CheckAllProxiesBody,
+  CheckAllResponse,
+  CheckProxy200,
+  CheckProxyBody,
+  ErrorResponse,
+  HealthStatus,
+  MessageResponse,
+  ProxyListResponse,
+  SchedulerActionResponse,
+  SchedulerStatus,
+  StartSchedulerBody,
+} from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
-import type { ErrorType } from "../custom-fetch";
+import type { ErrorType, BodyType } from "../custom-fetch";
 
 type AwaitedInput<T> = PromiseLike<T> | T;
 
@@ -25,7 +42,6 @@ type Awaited<O> = O extends AwaitedInput<infer T> ? T : never;
 type SecondParameter<T extends (...args: never) => unknown> = Parameters<T>[1];
 
 /**
- * Returns server health status
  * @summary Health check
  */
 export const getHealthCheckUrl = () => {
@@ -99,3 +115,825 @@ export function useHealthCheck<
 
   return { ...query, queryKey: queryOptions.queryKey };
 }
+
+/**
+ * @summary List all proxies and pool stats
+ */
+export const getListProxiesUrl = () => {
+  return `/api/proxies`;
+};
+
+export const listProxies = async (
+  options?: RequestInit,
+): Promise<ProxyListResponse> => {
+  return customFetch<ProxyListResponse>(getListProxiesUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListProxiesQueryKey = () => {
+  return [`/api/proxies`] as const;
+};
+
+export const getListProxiesQueryOptions = <
+  TData = Awaited<ReturnType<typeof listProxies>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listProxies>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListProxiesQueryKey();
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listProxies>>> = ({
+    signal,
+  }) => listProxies({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listProxies>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListProxiesQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listProxies>>
+>;
+export type ListProxiesQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List all proxies and pool stats
+ */
+
+export function useListProxies<
+  TData = Awaited<ReturnType<typeof listProxies>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof listProxies>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListProxiesQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Add one or multiple proxies
+ */
+export const getAddProxiesUrl = () => {
+  return `/api/proxies`;
+};
+
+export const addProxies = async (
+  addProxiesBody: AddProxiesBody,
+  options?: RequestInit,
+): Promise<AddProxies201> => {
+  return customFetch<AddProxies201>(getAddProxiesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(addProxiesBody),
+  });
+};
+
+export const getAddProxiesMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProxies>>,
+    TError,
+    { data: BodyType<AddProxiesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof addProxies>>,
+  TError,
+  { data: BodyType<AddProxiesBody> },
+  TContext
+> => {
+  const mutationKey = ["addProxies"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof addProxies>>,
+    { data: BodyType<AddProxiesBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return addProxies(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type AddProxiesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof addProxies>>
+>;
+export type AddProxiesMutationBody = BodyType<AddProxiesBody>;
+export type AddProxiesMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Add one or multiple proxies
+ */
+export const useAddProxies = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof addProxies>>,
+    TError,
+    { data: BodyType<AddProxiesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof addProxies>>,
+  TError,
+  { data: BodyType<AddProxiesBody> },
+  TContext
+> => {
+  return useMutation(getAddProxiesMutationOptions(options));
+};
+
+/**
+ * @summary Clear all proxies
+ */
+export const getClearProxiesUrl = () => {
+  return `/api/proxies`;
+};
+
+export const clearProxies = async (
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getClearProxiesUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getClearProxiesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearProxies>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clearProxies>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["clearProxies"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clearProxies>>,
+    void
+  > = () => {
+    return clearProxies(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClearProxiesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clearProxies>>
+>;
+
+export type ClearProxiesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Clear all proxies
+ */
+export const useClearProxies = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearProxies>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof clearProxies>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getClearProxiesMutationOptions(options));
+};
+
+/**
+ * @summary Check health of all proxies
+ */
+export const getCheckAllProxiesUrl = () => {
+  return `/api/proxies/check-all`;
+};
+
+export const checkAllProxies = async (
+  checkAllProxiesBody: CheckAllProxiesBody,
+  options?: RequestInit,
+): Promise<CheckAllResponse> => {
+  return customFetch<CheckAllResponse>(getCheckAllProxiesUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(checkAllProxiesBody),
+  });
+};
+
+export const getCheckAllProxiesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkAllProxies>>,
+    TError,
+    { data: BodyType<CheckAllProxiesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof checkAllProxies>>,
+  TError,
+  { data: BodyType<CheckAllProxiesBody> },
+  TContext
+> => {
+  const mutationKey = ["checkAllProxies"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof checkAllProxies>>,
+    { data: BodyType<CheckAllProxiesBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return checkAllProxies(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CheckAllProxiesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof checkAllProxies>>
+>;
+export type CheckAllProxiesMutationBody = BodyType<CheckAllProxiesBody>;
+export type CheckAllProxiesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Check health of all proxies
+ */
+export const useCheckAllProxies = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkAllProxies>>,
+    TError,
+    { data: BodyType<CheckAllProxiesBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof checkAllProxies>>,
+  TError,
+  { data: BodyType<CheckAllProxiesBody> },
+  TContext
+> => {
+  return useMutation(getCheckAllProxiesMutationOptions(options));
+};
+
+/**
+ * @summary Get scheduler status
+ */
+export const getGetSchedulerStatusUrl = () => {
+  return `/api/proxies/scheduler`;
+};
+
+export const getSchedulerStatus = async (
+  options?: RequestInit,
+): Promise<SchedulerStatus> => {
+  return customFetch<SchedulerStatus>(getGetSchedulerStatusUrl(), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetSchedulerStatusQueryKey = () => {
+  return [`/api/proxies/scheduler`] as const;
+};
+
+export const getGetSchedulerStatusQueryOptions = <
+  TData = Awaited<ReturnType<typeof getSchedulerStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSchedulerStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetSchedulerStatusQueryKey();
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getSchedulerStatus>>
+  > = ({ signal }) => getSchedulerStatus({ signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof getSchedulerStatus>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetSchedulerStatusQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getSchedulerStatus>>
+>;
+export type GetSchedulerStatusQueryError = ErrorType<unknown>;
+
+/**
+ * @summary Get scheduler status
+ */
+
+export function useGetSchedulerStatus<
+  TData = Awaited<ReturnType<typeof getSchedulerStatus>>,
+  TError = ErrorType<unknown>,
+>(options?: {
+  query?: UseQueryOptions<
+    Awaited<ReturnType<typeof getSchedulerStatus>>,
+    TError,
+    TData
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetSchedulerStatusQueryOptions(options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Start or reconfigure the scheduler
+ */
+export const getStartSchedulerUrl = () => {
+  return `/api/proxies/scheduler/start`;
+};
+
+export const startScheduler = async (
+  startSchedulerBody: StartSchedulerBody,
+  options?: RequestInit,
+): Promise<SchedulerActionResponse> => {
+  return customFetch<SchedulerActionResponse>(getStartSchedulerUrl(), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(startSchedulerBody),
+  });
+};
+
+export const getStartSchedulerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startScheduler>>,
+    TError,
+    { data: BodyType<StartSchedulerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof startScheduler>>,
+  TError,
+  { data: BodyType<StartSchedulerBody> },
+  TContext
+> => {
+  const mutationKey = ["startScheduler"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof startScheduler>>,
+    { data: BodyType<StartSchedulerBody> }
+  > = (props) => {
+    const { data } = props ?? {};
+
+    return startScheduler(data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StartSchedulerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof startScheduler>>
+>;
+export type StartSchedulerMutationBody = BodyType<StartSchedulerBody>;
+export type StartSchedulerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Start or reconfigure the scheduler
+ */
+export const useStartScheduler = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof startScheduler>>,
+    TError,
+    { data: BodyType<StartSchedulerBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof startScheduler>>,
+  TError,
+  { data: BodyType<StartSchedulerBody> },
+  TContext
+> => {
+  return useMutation(getStartSchedulerMutationOptions(options));
+};
+
+/**
+ * @summary Stop the scheduler
+ */
+export const getStopSchedulerUrl = () => {
+  return `/api/proxies/scheduler/stop`;
+};
+
+export const stopScheduler = async (
+  options?: RequestInit,
+): Promise<SchedulerActionResponse> => {
+  return customFetch<SchedulerActionResponse>(getStopSchedulerUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getStopSchedulerMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof stopScheduler>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof stopScheduler>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["stopScheduler"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof stopScheduler>>,
+    void
+  > = () => {
+    return stopScheduler(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type StopSchedulerMutationResult = NonNullable<
+  Awaited<ReturnType<typeof stopScheduler>>
+>;
+
+export type StopSchedulerMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Stop the scheduler
+ */
+export const useStopScheduler = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof stopScheduler>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof stopScheduler>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getStopSchedulerMutationOptions(options));
+};
+
+/**
+ * @summary Manually trigger health check
+ */
+export const getRunSchedulerNowUrl = () => {
+  return `/api/proxies/scheduler/run-now`;
+};
+
+export const runSchedulerNow = async (
+  options?: RequestInit,
+): Promise<SchedulerActionResponse> => {
+  return customFetch<SchedulerActionResponse>(getRunSchedulerNowUrl(), {
+    ...options,
+    method: "POST",
+  });
+};
+
+export const getRunSchedulerNowMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runSchedulerNow>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof runSchedulerNow>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["runSchedulerNow"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof runSchedulerNow>>,
+    void
+  > = () => {
+    return runSchedulerNow(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type RunSchedulerNowMutationResult = NonNullable<
+  Awaited<ReturnType<typeof runSchedulerNow>>
+>;
+
+export type RunSchedulerNowMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Manually trigger health check
+ */
+export const useRunSchedulerNow = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof runSchedulerNow>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof runSchedulerNow>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getRunSchedulerNowMutationOptions(options));
+};
+
+/**
+ * @summary Delete a proxy by ID
+ */
+export const getDeleteProxyUrl = (id: string) => {
+  return `/api/proxies/${id}`;
+};
+
+export const deleteProxy = async (
+  id: string,
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getDeleteProxyUrl(id), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getDeleteProxyMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProxy>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof deleteProxy>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  const mutationKey = ["deleteProxy"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof deleteProxy>>,
+    { id: string }
+  > = (props) => {
+    const { id } = props ?? {};
+
+    return deleteProxy(id, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type DeleteProxyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof deleteProxy>>
+>;
+
+export type DeleteProxyMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Delete a proxy by ID
+ */
+export const useDeleteProxy = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof deleteProxy>>,
+    TError,
+    { id: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof deleteProxy>>,
+  TError,
+  { id: string },
+  TContext
+> => {
+  return useMutation(getDeleteProxyMutationOptions(options));
+};
+
+/**
+ * @summary Check health of a single proxy
+ */
+export const getCheckProxyUrl = (id: string) => {
+  return `/api/proxies/${id}/check`;
+};
+
+export const checkProxy = async (
+  id: string,
+  checkProxyBody: CheckProxyBody,
+  options?: RequestInit,
+): Promise<CheckProxy200> => {
+  return customFetch<CheckProxy200>(getCheckProxyUrl(id), {
+    ...options,
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...options?.headers },
+    body: JSON.stringify(checkProxyBody),
+  });
+};
+
+export const getCheckProxyMutationOptions = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkProxy>>,
+    TError,
+    { id: string; data: BodyType<CheckProxyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof checkProxy>>,
+  TError,
+  { id: string; data: BodyType<CheckProxyBody> },
+  TContext
+> => {
+  const mutationKey = ["checkProxy"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof checkProxy>>,
+    { id: string; data: BodyType<CheckProxyBody> }
+  > = (props) => {
+    const { id, data } = props ?? {};
+
+    return checkProxy(id, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type CheckProxyMutationResult = NonNullable<
+  Awaited<ReturnType<typeof checkProxy>>
+>;
+export type CheckProxyMutationBody = BodyType<CheckProxyBody>;
+export type CheckProxyMutationError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Check health of a single proxy
+ */
+export const useCheckProxy = <
+  TError = ErrorType<ErrorResponse>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof checkProxy>>,
+    TError,
+    { id: string; data: BodyType<CheckProxyBody> },
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof checkProxy>>,
+  TError,
+  { id: string; data: BodyType<CheckProxyBody> },
+  TContext
+> => {
+  return useMutation(getCheckProxyMutationOptions(options));
+};

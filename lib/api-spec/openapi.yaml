@@ -1,6 +1,5 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
   description: API specification
@@ -10,13 +9,16 @@ servers:
 tags:
   - name: health
     description: Health operations
+  - name: proxies
+    description: Proxy pool management
+  - name: scheduler
+    description: Proxy health check scheduler
 paths:
   /healthz:
     get:
       operationId: healthCheck
       tags: [health]
       summary: Health check
-      description: Returns server health status
       responses:
         "200":
           description: Healthy
@@ -24,6 +26,222 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /proxies:
+    get:
+      operationId: listProxies
+      tags: [proxies]
+      summary: List all proxies and pool stats
+      responses:
+        "200":
+          description: Proxy list with stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProxyListResponse"
+    post:
+      operationId: addProxies
+      tags: [proxies]
+      summary: Add one or multiple proxies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url:
+                  type: string
+                label:
+                  type: string
+                urls:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      url:
+                        type: string
+                      label:
+                        type: string
+      responses:
+        "201":
+          description: Proxy added
+          content:
+            application/json:
+              schema:
+                type: object
+        "400":
+          description: Invalid input
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    delete:
+      operationId: clearProxies
+      tags: [proxies]
+      summary: Clear all proxies
+      responses:
+        "200":
+          description: All proxies cleared
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+
+  /proxies/check-all:
+    post:
+      operationId: checkAllProxies
+      tags: [proxies]
+      summary: Check health of all proxies
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                testUrl:
+                  type: string
+      responses:
+        "200":
+          description: Health check results
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CheckAllResponse"
+
+  /proxies/scheduler:
+    get:
+      operationId: getSchedulerStatus
+      tags: [scheduler]
+      summary: Get scheduler status
+      responses:
+        "200":
+          description: Scheduler status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulerStatus"
+
+  /proxies/scheduler/start:
+    post:
+      operationId: startScheduler
+      tags: [scheduler]
+      summary: Start or reconfigure the scheduler
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                intervalMinutes:
+                  type: integer
+                testUrl:
+                  type: string
+      responses:
+        "200":
+          description: Scheduler started
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulerActionResponse"
+
+  /proxies/scheduler/stop:
+    post:
+      operationId: stopScheduler
+      tags: [scheduler]
+      summary: Stop the scheduler
+      responses:
+        "200":
+          description: Scheduler stopped
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulerActionResponse"
+
+  /proxies/scheduler/run-now:
+    post:
+      operationId: runSchedulerNow
+      tags: [scheduler]
+      summary: Manually trigger health check
+      responses:
+        "200":
+          description: Health check triggered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SchedulerActionResponse"
+
+  /proxies/{id}:
+    delete:
+      operationId: deleteProxy
+      tags: [proxies]
+      summary: Delete a proxy by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Proxy deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MessageResponse"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /proxies/{id}/check:
+    post:
+      operationId: checkProxy
+      tags: [proxies]
+      summary: Check health of a single proxy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                testUrl:
+                  type: string
+      responses:
+        "200":
+          description: Check result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  alive:
+                    type: boolean
+                  latencyMs:
+                    type: integer
+                    nullable: true
+                  statusCode:
+                    type: integer
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
+                required: [alive]
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +249,132 @@ components:
       properties:
         status:
           type: string
-      required:
-        - status
+      required: [status]
 
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    MessageResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    ProxyEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        protocol:
+          type: string
+        label:
+          type: string
+          nullable: true
+        addedAt:
+          type: string
+        lastUsedAt:
+          type: string
+          nullable: true
+        lastCheckedAt:
+          type: string
+          nullable: true
+        successCount:
+          type: integer
+        failureCount:
+          type: integer
+        consecutiveFails:
+          type: integer
+        alive:
+          type: boolean
+        latencyMs:
+          type: integer
+          nullable: true
+      required: [id, url, protocol, addedAt, successCount, failureCount, consecutiveFails, alive]
+
+    PoolStats:
+      type: object
+      properties:
+        total:
+          type: integer
+        alive:
+          type: integer
+        dead:
+          type: integer
+      required: [total, alive, dead]
+
+    ProxyListResponse:
+      type: object
+      properties:
+        stats:
+          $ref: "#/components/schemas/PoolStats"
+        proxies:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProxyEntry"
+      required: [stats, proxies]
+
+    CheckResultEntry:
+      type: object
+      properties:
+        id:
+          type: string
+        url:
+          type: string
+        alive:
+          type: boolean
+        latencyMs:
+          type: integer
+          nullable: true
+        error:
+          type: string
+          nullable: true
+
+    CheckAllResponse:
+      type: object
+      properties:
+        total:
+          type: integer
+        stats:
+          $ref: "#/components/schemas/PoolStats"
+        results:
+          type: array
+          items:
+            $ref: "#/components/schemas/CheckResultEntry"
+      required: [total, stats, results]
+
+    SchedulerStatus:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+        intervalMs:
+          type: integer
+        intervalMinutes:
+          type: integer
+        testUrl:
+          type: string
+        lastRunAt:
+          type: string
+          nullable: true
+        nextRunAt:
+          type: string
+          nullable: true
+        runCount:
+          type: integer
+      required: [enabled, intervalMs, intervalMinutes, testUrl, runCount]
+
+    SchedulerActionResponse:
+      type: object
+      properties:
+        message:
+          type: string
+        status:
+          $ref: "#/components/schemas/SchedulerStatus"
+      required: [message, status]
