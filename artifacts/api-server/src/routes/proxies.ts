@@ -10,6 +10,12 @@ import {
   markDead,
   getProxy,
 } from "../lib/proxy-pool";
+import {
+  startScheduler,
+  stopScheduler,
+  runNow,
+  getSchedulerStatus,
+} from "../lib/proxy-scheduler";
 
 const router: IRouter = Router();
 
@@ -120,6 +126,30 @@ router.post("/proxies/check-all", async (req, res) => {
   const parsed = results.map((r) => (r.status === "fulfilled" ? r.value : { error: "检测异常" }));
   req.log.info({ total: proxies.length }, "批量检测代理完成");
   res.json({ total: proxies.length, stats: poolStats(), results: parsed });
+});
+
+router.get("/proxies/scheduler", (_req, res) => {
+  res.json(getSchedulerStatus());
+});
+
+router.post("/proxies/scheduler/start", (req, res) => {
+  const body = req.body as { intervalMinutes?: number; testUrl?: string };
+  const intervalMs = body.intervalMinutes ? body.intervalMinutes * 60 * 1000 : undefined;
+  startScheduler(intervalMs, body.testUrl);
+  req.log.info({ intervalMs, testUrl: body.testUrl }, "定时检测已启动");
+  res.json({ message: "定时检测已启动", status: getSchedulerStatus() });
+});
+
+router.post("/proxies/scheduler/stop", (req, res) => {
+  stopScheduler();
+  req.log.info("定时检测已停止");
+  res.json({ message: "定时检测已停止", status: getSchedulerStatus() });
+});
+
+router.post("/proxies/scheduler/run-now", async (req, res) => {
+  req.log.info("手动触发代理检测");
+  await runNow();
+  res.json({ message: "检测完成", status: getSchedulerStatus() });
 });
 
 export default router;
