@@ -1,6 +1,8 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { startScheduler } from "./lib/proxy-scheduler";
+import { loadProxiesFromDb, loadSchedulerConfigFromDb } from "./lib/proxy-db";
+import { loadProxyIntoMemory } from "./lib/proxy-pool";
 
 const rawPort = process.env["PORT"];
 
@@ -16,13 +18,31 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-app.listen(port, (err) => {
-  if (err) {
-    logger.error({ err }, "Error listening on port");
-    process.exit(1);
+async function bootstrap() {
+  const proxies = await loadProxiesFromDb();
+  for (const proxy of proxies) {
+    loadProxyIntoMemory(proxy);
+  }
+  logger.info({ count: proxies.length }, "从数据库恢复代理池");
+
+  const savedConfig = await loadSchedulerConfigFromDb();
+  if (savedConfig && savedConfig.enabled) {
+    startScheduler(savedConfig.intervalMs, savedConfig.testUrl);
+    logger.info({ intervalMs: savedConfig.intervalMs }, "从数据库恢复调度器配置");
+  } else {
+    startScheduler(5 * 60 * 1000, "https://httpbin.org/ip");
   }
 
-  logger.info({ port }, "Server listening");
+  app.listen(port, (err) => {
+    if (err) {
+      logger.error({ err }, "Error listening on port");
+      process.exit(1);
+    }
+    logger.info({ port }, "Server listening");
+  });
+}
 
-  startScheduler(5 * 60 * 1000, "https://httpbin.org/ip");
+bootstrap().catch((err) => {
+  logger.error({ err }, "启动失败");
+  process.exit(1);
 });

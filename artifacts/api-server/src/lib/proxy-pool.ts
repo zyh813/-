@@ -1,3 +1,10 @@
+import {
+  saveProxyToDb,
+  deleteProxyFromDb,
+  deleteAllProxiesFromDb,
+  updateProxyStatsInDb,
+} from "./proxy-db";
+
 export interface ProxyEntry {
   id: string;
   url: string;
@@ -27,6 +34,10 @@ const pool: ProxyPool = {
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
+}
+
+export function loadProxyIntoMemory(entry: ProxyEntry): void {
+  pool.proxies.set(entry.id, entry);
 }
 
 export function addProxy(
@@ -65,11 +76,14 @@ export function addProxy(
   };
 
   pool.proxies.set(id, entry);
+  saveProxyToDb(entry).catch(() => {});
   return entry;
 }
 
 export function removeProxy(id: string): boolean {
-  return pool.proxies.delete(id);
+  const deleted = pool.proxies.delete(id);
+  if (deleted) deleteProxyFromDb(id).catch(() => {});
+  return deleted;
 }
 
 export function listProxies(): ProxyEntry[] {
@@ -83,6 +97,7 @@ export function getProxy(id: string): ProxyEntry | undefined {
 export function clearProxies(): void {
   pool.proxies.clear();
   pool.roundRobinIndex = 0;
+  deleteAllProxiesFromDb().catch(() => {});
 }
 
 export function recordSuccess(id: string, latencyMs: number): void {
@@ -93,6 +108,13 @@ export function recordSuccess(id: string, latencyMs: number): void {
   entry.alive = true;
   entry.latencyMs = latencyMs;
   entry.lastUsedAt = new Date().toISOString();
+  updateProxyStatsInDb(id, {
+    successCount: entry.successCount,
+    consecutiveFails: 0,
+    alive: true,
+    latencyMs,
+    lastUsedAt: entry.lastUsedAt,
+  }).catch(() => {});
 }
 
 export function recordFailure(id: string): void {
@@ -104,6 +126,12 @@ export function recordFailure(id: string): void {
   if (entry.consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
     entry.alive = false;
   }
+  updateProxyStatsInDb(id, {
+    failureCount: entry.failureCount,
+    consecutiveFails: entry.consecutiveFails,
+    alive: entry.alive,
+    lastUsedAt: entry.lastUsedAt,
+  }).catch(() => {});
 }
 
 export function markAlive(id: string, latencyMs: number): void {
@@ -113,6 +141,12 @@ export function markAlive(id: string, latencyMs: number): void {
   entry.consecutiveFails = 0;
   entry.latencyMs = latencyMs;
   entry.lastCheckedAt = new Date().toISOString();
+  updateProxyStatsInDb(id, {
+    alive: true,
+    consecutiveFails: 0,
+    latencyMs,
+    lastCheckedAt: entry.lastCheckedAt,
+  }).catch(() => {});
 }
 
 export function markDead(id: string): void {
@@ -120,6 +154,10 @@ export function markDead(id: string): void {
   if (!entry) return;
   entry.alive = false;
   entry.lastCheckedAt = new Date().toISOString();
+  updateProxyStatsInDb(id, {
+    alive: false,
+    lastCheckedAt: entry.lastCheckedAt,
+  }).catch(() => {});
 }
 
 export function pickProxy(strategy: "random" | "roundrobin" = "roundrobin"): ProxyEntry | null {

@@ -1,6 +1,7 @@
 import { listProxies, markAlive, markDead, poolStats } from "./proxy-pool";
 import { undiciFetch } from "./undici-fetch";
 import { logger } from "./logger";
+import { saveSchedulerConfigToDb } from "./proxy-db";
 
 interface SchedulerState {
   enabled: boolean;
@@ -76,6 +77,12 @@ export function startScheduler(intervalMs?: number, testUrl?: string): void {
     runHealthCheck().catch((err) => logger.error({ err }, "proxy-scheduler: 检测出错"));
   }, state.intervalMs);
 
+  saveSchedulerConfigToDb({
+    enabled: true,
+    intervalMs: state.intervalMs,
+    testUrl: state.testUrl,
+  }).catch(() => {});
+
   logger.info(
     { intervalMs: state.intervalMs, testUrl: state.testUrl },
     "proxy-scheduler: 已启动"
@@ -89,6 +96,13 @@ export function stopScheduler(): void {
   }
   state.enabled = false;
   state.nextRunAt = null;
+
+  saveSchedulerConfigToDb({
+    enabled: false,
+    intervalMs: state.intervalMs,
+    testUrl: state.testUrl,
+  }).catch(() => {});
+
   logger.info("proxy-scheduler: 已停止");
 }
 
