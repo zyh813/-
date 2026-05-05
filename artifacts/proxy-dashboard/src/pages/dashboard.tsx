@@ -196,7 +196,39 @@ type FetchResult = {
   };
 };
 
-function FetchResultView({ result }: { result: FetchResult }) {
+type HistoryItem = {
+  id: string;
+  timestamp: number;
+  url: string;
+  statusCode: number;
+  durationMs: number;
+  proxyUsed: string | null;
+  title: string | null;
+  ok: boolean;
+  error?: string;
+};
+
+const HISTORY_KEY = "proxy-dashboard:fetch-history";
+const MAX_HISTORY = 10;
+
+function loadHistory(): HistoryItem[] {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveHistory(items: HistoryItem[]) {
+  localStorage.setItem(HISTORY_KEY, JSON.stringify(items.slice(0, MAX_HISTORY)));
+}
+
+function pushHistory(item: HistoryItem) {
+  const prev = loadHistory().filter((h) => h.id !== item.id);
+  saveHistory([item, ...prev]);
+}
+
+function FetchResultView({ result, durationMs }: { result: FetchResult; durationMs: number }) {
   const [showBody, setShowBody] = useState(false);
   const [showLinks, setShowLinks] = useState(false);
 
@@ -214,9 +246,12 @@ function FetchResultView({ result }: { result: FetchResult }) {
           <span className={`font-semibold text-sm ${isOk ? "text-green-700" : "text-red-600"}`}>
             HTTP {result.statusCode}
           </span>
+          <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+            <Clock className="w-3 h-3" />{durationMs}ms
+          </span>
           {result.proxyUsed ? (
-            <Badge variant="outline" className="text-xs ml-auto">
-              代理: {result.proxyUsed}
+            <Badge variant="outline" className="text-xs ml-auto truncate max-w-[120px]">
+              {result.proxyUsed}
             </Badge>
           ) : (
             <Badge variant="secondary" className="text-xs ml-auto">直连</Badge>
@@ -321,7 +356,9 @@ export default function Dashboard() {
   const [strategy, setStrategy] = useState<"roundrobin" | "random">("roundrobin");
   const [fetchLoading, setFetchLoading] = useState(false);
   const [fetchResult, setFetchResult] = useState<FetchResult | null>(null);
+  const [fetchDurationMs, setFetchDurationMs] = useState(0);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryItem[]>(loadHistory);
 
   const { data: proxiesData, isLoading: proxiesLoading, refetch: refetchProxies } = useListProxies();
   const { data: schedulerData, refetch: refetchScheduler } = useGetSchedulerStatus();
@@ -436,6 +473,9 @@ export default function Dashboard() {
     setFetchLoading(true);
     setFetchResult(null);
     setFetchError(null);
+    setFetchDurationMs(0);
+    const t0 = performance.now();
+    const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     try {
       const params = new URLSearchParams({ url });
       if (useProxy) {
@@ -443,14 +483,39 @@ export default function Dashboard() {
         params.set("strategy", strategy);
       }
       const res = await fetch(`/api/fetch-page?${params.toString()}`);
+      const durationMs = Math.round(performance.now() - t0);
       const data = await res.json();
       if (!res.ok) {
-        setFetchError(data.error ?? `请求失败 (${res.status})`);
+        const errMsg = data.error ?? `请求失败 (${res.status})`;
+        setFetchError(errMsg);
+        const item: HistoryItem = {
+          id, timestamp: Date.now(), url, statusCode: res.status,
+          durationMs, proxyUsed: null, title: null, ok: false, error: errMsg,
+        };
+        pushHistory(item);
+        setHistory(loadHistory());
       } else {
-        setFetchResult(data as FetchResult);
+        const result = data as FetchResult;
+        setFetchResult(result);
+        setFetchDurationMs(durationMs);
+        const item: HistoryItem = {
+          id, timestamp: Date.now(), url,
+          statusCode: result.statusCode, durationMs,
+          proxyUsed: result.proxyUsed, title: result.parsed.title, ok: true,
+        };
+        pushHistory(item);
+        setHistory(loadHistory());
       }
     } catch (e) {
-      setFetchError(e instanceof Error ? e.message : "网络错误");
+      const durationMs = Math.round(performance.now() - t0);
+      const errMsg = e instanceof Error ? e.message : "网络错误";
+      setFetchError(errMsg);
+      const item: HistoryItem = {
+        id, timestamp: Date.now(), url, statusCode: 0,
+        durationMs, proxyUsed: null, title: null, ok: false, error: errMsg,
+      };
+      pushHistory(item);
+      setHistory(loadHistory());
     } finally {
       setFetchLoading(false);
     }
@@ -712,7 +777,56 @@ export default function Dashboard() {
               </div>
             )}
 
-            {fetchResult && <FetchResultView result={fetchResult} />}
+            {fetchResult && <FetchResultView result={fetchResult} durationMs={fetchDurationMs} />}
+
+            {history.length > 0 && (
+              <div className="mt-6">
+                <div className="flex items-center justify-between mb-2">
+                  <p className="text-xs font-medium text-muted-foreground">历史记录（最近 {history.length} 条）</p>
+                  <button
+                    className="text-xs text-muted-foreground hover:text-destructive"
+                    onClick={() => { saveHistory([]); setHistory([]); }}
+                  >
+                    清除
+                  </button>
+                </div>
+                <div className="space-y-1.5">
+                  {history.map((h) => (
+                    <button
+                      key={h.id}
+                      className="w-full text-left rounded-lg border px-3 py-2 hover:bg-muted/50 transition-colors"
+                      onClick={() => setFetchUrl(h.url)}
+                    >
+                      <div className="flex items-center gap-2">
+                        {h.ok ? (
+                          <CheckCircle className="w-3 h-3 text-green-500 flex-shrink-0" />
+                        ) : (
+                          <XCircle className="w-3 h-3 text-red-400 flex-shrink-0" />
+                        )}
+                        <span className={`text-xs font-mono font-medium ${h.ok ? "text-green-700" : "text-red-500"}`}>
+                          {h.statusCode || "ERR"}
+                        </span>
+                        <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                          <Clock className="w-2.5 h-2.5" />{h.durationMs}ms
+                        </span>
+                        {h.proxyUsed && (
+                          <Badge variant="outline" className="text-xs py-0 h-4">代理</Badge>
+                        )}
+                        <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+                          {new Date(h.timestamp).toLocaleTimeString()}
+                        </span>
+                      </div>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">
+                        {h.title ?? h.url}
+                      </p>
+                      {h.error && (
+                        <p className="text-xs text-red-400 truncate mt-0.5">{h.error}</p>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
           </TabsContent>
 
           <TabsContent value="scheduler" className="space-y-4">
