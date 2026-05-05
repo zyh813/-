@@ -39,6 +39,8 @@ router.get("/fetch-page", async (req, res) => {
   const targetUrl = req.query.url as string;
   const referer = req.query.referer as string | undefined;
   const cookies = req.query.cookies as string | undefined;
+  const useProxy = req.query.proxy === "true";
+  const proxyStrategy = (req.query.strategy as "random" | "roundrobin" | undefined) ?? "roundrobin";
 
   if (!targetUrl) {
     res.status(400).json({ error: "缺少参数：url" });
@@ -57,16 +59,17 @@ router.get("/fetch-page", async (req, res) => {
   }
 
   try {
-    const result = await humanFetch(targetUrl, { referer, cookies });
+    const result = await humanFetch(targetUrl, { referer, cookies, useProxy, proxyStrategy });
     const parsedContent = parseHtml(result.body, result.finalUrl);
 
-    req.log.info({ url: targetUrl, statusCode: result.statusCode }, "fetch-page 成功");
+    req.log.info({ url: targetUrl, statusCode: result.statusCode, proxy: result.proxyUsed ?? "直连" }, "fetch-page 成功");
 
     res.json({
       url: targetUrl,
       finalUrl: result.finalUrl,
       statusCode: result.statusCode,
       contentType: result.contentType,
+      proxyUsed: result.proxyUsed ?? null,
       parsed: parsedContent,
       rawBody: result.body,
     });

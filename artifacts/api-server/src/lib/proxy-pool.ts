@@ -1,0 +1,147 @@
+export interface ProxyEntry {
+  id: string;
+  url: string;
+  protocol: "http" | "https" | "socks5";
+  label?: string;
+  addedAt: string;
+  lastUsedAt?: string;
+  lastCheckedAt?: string;
+  successCount: number;
+  failureCount: number;
+  consecutiveFails: number;
+  alive: boolean;
+  latencyMs?: number;
+}
+
+interface ProxyPool {
+  proxies: Map<string, ProxyEntry>;
+  roundRobinIndex: number;
+}
+
+const MAX_CONSECUTIVE_FAILS = 3;
+
+const pool: ProxyPool = {
+  proxies: new Map(),
+  roundRobinIndex: 0,
+};
+
+function generateId(): string {
+  return Math.random().toString(36).slice(2, 10);
+}
+
+export function addProxy(
+  rawUrl: string,
+  label?: string
+): ProxyEntry | { error: string } {
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return { error: "无效的代理 URL 格式" };
+  }
+
+  const protocol = parsed.protocol.replace(":", "") as ProxyEntry["protocol"];
+  if (!["http", "https", "socks5"].includes(protocol)) {
+    return { error: "仅支持 http / https / socks5 协议" };
+  }
+
+  for (const entry of pool.proxies.values()) {
+    if (entry.url === rawUrl) {
+      return { error: "该代理已存在" };
+    }
+  }
+
+  const id = generateId();
+  const entry: ProxyEntry = {
+    id,
+    url: rawUrl,
+    protocol,
+    label,
+    addedAt: new Date().toISOString(),
+    successCount: 0,
+    failureCount: 0,
+    consecutiveFails: 0,
+    alive: true,
+  };
+
+  pool.proxies.set(id, entry);
+  return entry;
+}
+
+export function removeProxy(id: string): boolean {
+  return pool.proxies.delete(id);
+}
+
+export function listProxies(): ProxyEntry[] {
+  return Array.from(pool.proxies.values());
+}
+
+export function getProxy(id: string): ProxyEntry | undefined {
+  return pool.proxies.get(id);
+}
+
+export function clearProxies(): void {
+  pool.proxies.clear();
+  pool.roundRobinIndex = 0;
+}
+
+export function recordSuccess(id: string, latencyMs: number): void {
+  const entry = pool.proxies.get(id);
+  if (!entry) return;
+  entry.successCount++;
+  entry.consecutiveFails = 0;
+  entry.alive = true;
+  entry.latencyMs = latencyMs;
+  entry.lastUsedAt = new Date().toISOString();
+}
+
+export function recordFailure(id: string): void {
+  const entry = pool.proxies.get(id);
+  if (!entry) return;
+  entry.failureCount++;
+  entry.consecutiveFails++;
+  entry.lastUsedAt = new Date().toISOString();
+  if (entry.consecutiveFails >= MAX_CONSECUTIVE_FAILS) {
+    entry.alive = false;
+  }
+}
+
+export function markAlive(id: string, latencyMs: number): void {
+  const entry = pool.proxies.get(id);
+  if (!entry) return;
+  entry.alive = true;
+  entry.consecutiveFails = 0;
+  entry.latencyMs = latencyMs;
+  entry.lastCheckedAt = new Date().toISOString();
+}
+
+export function markDead(id: string): void {
+  const entry = pool.proxies.get(id);
+  if (!entry) return;
+  entry.alive = false;
+  entry.lastCheckedAt = new Date().toISOString();
+}
+
+export function pickProxy(strategy: "random" | "roundrobin" = "roundrobin"): ProxyEntry | null {
+  const alive = Array.from(pool.proxies.values()).filter((p) => p.alive);
+  if (alive.length === 0) return null;
+
+  if (strategy === "random") {
+    return alive[Math.floor(Math.random() * alive.length)];
+  }
+
+  const index = pool.roundRobinIndex % alive.length;
+  pool.roundRobinIndex = (pool.roundRobinIndex + 1) % alive.length;
+  return alive[index];
+}
+
+export function poolStats() {
+  const all = Array.from(pool.proxies.values());
+  const alive = all.filter((p) => p.alive);
+  const dead = all.filter((p) => !p.alive);
+  return {
+    total: all.length,
+    alive: alive.length,
+    dead: dead.length,
+  };
+}

@@ -13,6 +13,8 @@ interface UrlTask {
   url: string;
   referer?: string;
   cookies?: string;
+  useProxy?: boolean;
+  proxyStrategy?: "random" | "roundrobin";
 }
 
 interface PageResult {
@@ -36,6 +38,8 @@ async function fetchWithDelay(
     const result = await humanFetch(task.url, {
       referer: task.referer,
       cookies: task.cookies,
+      useProxy: task.useProxy,
+      proxyStrategy: task.proxyStrategy,
     });
     const parsed = parseHtml(result.body, result.finalUrl);
     return {
@@ -80,6 +84,8 @@ router.post("/fetch-pages", async (req, res) => {
     urls?: unknown;
     referer?: string;
     cookies?: string;
+    useProxy?: boolean;
+    proxyStrategy?: "random" | "roundrobin";
   };
 
   if (!Array.isArray(body.urls) || body.urls.length === 0) {
@@ -109,16 +115,15 @@ router.post("/fetch-pages", async (req, res) => {
         invalid.push(url);
         continue;
       }
+      const isObj = typeof item === "object" && item !== null;
       tasks.push({
         url,
-        referer:
-          typeof item === "object" && item !== null
-            ? ((item as { referer?: string }).referer ?? body.referer)
-            : body.referer,
-        cookies:
-          typeof item === "object" && item !== null
-            ? ((item as { cookies?: string }).cookies ?? body.cookies)
-            : body.cookies,
+        referer: isObj ? ((item as { referer?: string }).referer ?? body.referer) : body.referer,
+        cookies: isObj ? ((item as { cookies?: string }).cookies ?? body.cookies) : body.cookies,
+        useProxy: isObj ? ((item as { useProxy?: boolean }).useProxy ?? body.useProxy) : body.useProxy,
+        proxyStrategy: isObj
+          ? ((item as { proxyStrategy?: "random" | "roundrobin" }).proxyStrategy ?? body.proxyStrategy)
+          : body.proxyStrategy,
       });
     } catch {
       invalid.push(String(item));

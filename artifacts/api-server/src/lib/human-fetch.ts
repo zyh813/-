@@ -1,3 +1,6 @@
+import { ProxyAgent, fetch as undiciFetch } from "undici";
+import { pickProxy, recordSuccess, recordFailure, type ProxyEntry } from "./proxy-pool";
+
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36 Edg/123.0.0.0",
@@ -15,11 +18,11 @@ const ACCEPT_LANGUAGES = [
   "zh-TW,zh;q=0.9,en-US;q=0.8,en;q=0.7",
 ];
 
-function randomPick<T>(arr: T[]): T {
+export function randomPick<T>(arr: T[]): T {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function randomDelay(minMs: number, maxMs: number): Promise<void> {
+export function randomDelay(minMs: number, maxMs: number): Promise<void> {
   const ms = Math.floor(Math.random() * (maxMs - minMs + 1)) + minMs;
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -30,20 +33,19 @@ export interface FetchResult {
   contentType: string;
   body: string;
   finalUrl: string;
+  proxyUsed?: string;
 }
 
 export interface HumanFetchOptions {
   timeoutMs?: number;
   referer?: string;
   cookies?: string;
+  useProxy?: boolean;
+  proxyStrategy?: "random" | "roundrobin";
+  forceProxy?: string;
 }
 
-export async function humanFetch(
-  targetUrl: string,
-  options: HumanFetchOptions = {}
-): Promise<FetchResult> {
-  const { timeoutMs = 10000, referer, cookies } = options;
-
+function buildHeaders(referer?: string, cookies?: string): Record<string, string> {
   const userAgent = randomPick(USER_AGENTS);
   const acceptLanguage = randomPick(ACCEPT_LANGUAGES);
 
@@ -63,14 +65,53 @@ export async function humanFetch(
     DNT: "1",
   };
 
-  if (referer) {
-    headers["Referer"] = referer;
-  }
+  if (referer) headers["Referer"] = referer;
+  if (cookies) headers["Cookie"] = cookies;
 
-  if (cookies) {
-    headers["Cookie"] = cookies;
-  }
+  return headers;
+}
 
+async function fetchViaProxy(
+  targetUrl: string,
+  proxy: ProxyEntry,
+  headers: Record<string, string>,
+  timeoutMs: number
+): Promise<{ body: string; statusCode: number; contentType: string; finalUrl: string }> {
+  const agent = new ProxyAgent({
+    uri: proxy.url,
+    connectTimeout: timeoutMs,
+  });
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await undiciFetch(targetUrl, {
+      method: "GET",
+      headers,
+      signal: controller.signal,
+      dispatcher: agent,
+      redirect: "follow",
+    } as Parameters<typeof undiciFetch>[1]);
+
+    const body = await response.text();
+    return {
+      body,
+      statusCode: response.status,
+      contentType: response.headers.get("content-type") ?? "",
+      finalUrl: response.url,
+    };
+  } finally {
+    clearTimeout(timer);
+    await agent.close().catch(() => {});
+  }
+}
+
+async function fetchDirect(
+  targetUrl: string,
+  headers: Record<string, string>,
+  timeoutMs: number
+): Promise<{ body: string; statusCode: number; contentType: string; finalUrl: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -83,12 +124,10 @@ export async function humanFetch(
     });
 
     const body = await response.text();
-
     return {
-      url: targetUrl,
+      body,
       statusCode: response.status,
       contentType: response.headers.get("content-type") ?? "",
-      body,
       finalUrl: response.url,
     };
   } finally {
@@ -96,4 +135,43 @@ export async function humanFetch(
   }
 }
 
-export { randomDelay };
+export async function humanFetch(
+  targetUrl: string,
+  options: HumanFetchOptions = {}
+): Promise<FetchResult> {
+  const {
+    timeoutMs = 10000,
+    referer,
+    cookies,
+    useProxy = false,
+    proxyStrategy = "roundrobin",
+  } = options;
+
+  const headers = buildHeaders(referer, cookies);
+
+  if (useProxy) {
+    const proxy = pickProxy(proxyStrategy);
+
+    if (proxy) {
+      const start = Date.now();
+      try {
+        const result = await fetchViaProxy(targetUrl, proxy, headers, timeoutMs);
+        recordSuccess(proxy.id, Date.now() - start);
+        return {
+          url: targetUrl,
+          ...result,
+          proxyUsed: proxy.url,
+        };
+      } catch (err) {
+        recordFailure(proxy.id);
+        throw err;
+      }
+    }
+  }
+
+  const result = await fetchDirect(targetUrl, headers, timeoutMs);
+  return {
+    url: targetUrl,
+    ...result,
+  };
+}
