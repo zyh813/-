@@ -46,6 +46,10 @@ import {
   ChevronDown,
   ChevronUp,
   Globe,
+  Search,
+  CheckCircle,
+  XCircle,
+  Link,
 } from "lucide-react";
 
 function StatCard({
@@ -177,6 +181,130 @@ function ProxyRow({ proxy, onDelete, onCheck }: {
   );
 }
 
+type FetchResult = {
+  url: string;
+  finalUrl: string;
+  statusCode: number;
+  contentType: string;
+  proxyUsed: string | null;
+  parsed: {
+    title: string | null;
+    metaDescription: string | null;
+    headings: { level: string; text: string }[];
+    links: { text: string; href: string }[];
+    bodyText: string;
+  };
+};
+
+function FetchResultView({ result }: { result: FetchResult }) {
+  const [showBody, setShowBody] = useState(false);
+  const [showLinks, setShowLinks] = useState(false);
+
+  const isOk = result.statusCode >= 200 && result.statusCode < 300;
+
+  return (
+    <div className="space-y-3 mt-4">
+      <div className={`rounded-lg border p-3 ${isOk ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}`}>
+        <div className="flex items-center gap-2 mb-2">
+          {isOk ? (
+            <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+          ) : (
+            <XCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
+          )}
+          <span className={`font-semibold text-sm ${isOk ? "text-green-700" : "text-red-600"}`}>
+            HTTP {result.statusCode}
+          </span>
+          {result.proxyUsed ? (
+            <Badge variant="outline" className="text-xs ml-auto">
+              代理: {result.proxyUsed}
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="text-xs ml-auto">直连</Badge>
+          )}
+        </div>
+        <p className="text-xs text-muted-foreground truncate">{result.finalUrl}</p>
+        <p className="text-xs text-muted-foreground mt-0.5">{result.contentType}</p>
+      </div>
+
+      {result.parsed.title && (
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground mb-1">页面标题</p>
+          <p className="text-sm font-medium">{result.parsed.title}</p>
+        </div>
+      )}
+
+      {result.parsed.metaDescription && (
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground mb-1">页面描述</p>
+          <p className="text-sm text-muted-foreground leading-relaxed">{result.parsed.metaDescription}</p>
+        </div>
+      )}
+
+      {result.parsed.headings.length > 0 && (
+        <div className="rounded-lg border p-3">
+          <p className="text-xs text-muted-foreground mb-2">标题结构（{result.parsed.headings.length} 个）</p>
+          <div className="space-y-1">
+            {result.parsed.headings.slice(0, 8).map((h, i) => (
+              <div key={i} className="flex items-start gap-2">
+                <Badge variant="outline" className="text-xs flex-shrink-0 font-mono uppercase">{h.level}</Badge>
+                <p className="text-xs leading-5 line-clamp-1">{h.text}</p>
+              </div>
+            ))}
+            {result.parsed.headings.length > 8 && (
+              <p className="text-xs text-muted-foreground">…还有 {result.parsed.headings.length - 8} 个</p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {result.parsed.bodyText && (
+        <div className="rounded-lg border overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 text-left"
+            onClick={() => setShowBody(!showBody)}
+          >
+            <span className="text-xs text-muted-foreground">正文摘要</span>
+            {showBody ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          {showBody && (
+            <div className="border-t px-3 py-2">
+              <p className="text-xs leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                {result.parsed.bodyText.slice(0, 800)}
+                {result.parsed.bodyText.length > 800 && "…"}
+              </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {result.parsed.links.length > 0 && (
+        <div className="rounded-lg border overflow-hidden">
+          <button
+            className="w-full flex items-center justify-between px-3 py-2 hover:bg-muted/50 text-left"
+            onClick={() => setShowLinks(!showLinks)}
+          >
+            <span className="text-xs text-muted-foreground">
+              <Link className="w-3 h-3 inline mr-1" />
+              链接（{result.parsed.links.length} 个）
+            </span>
+            {showLinks ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          </button>
+          {showLinks && (
+            <div className="border-t divide-y max-h-52 overflow-y-auto">
+              {result.parsed.links.slice(0, 30).map((link, i) => (
+                <div key={i} className="px-3 py-1.5">
+                  <p className="text-xs font-medium line-clamp-1">{link.text}</p>
+                  <p className="text-xs text-muted-foreground truncate">{link.href}</p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -187,6 +315,13 @@ export default function Dashboard() {
   const [batchText, setBatchText] = useState("");
   const [intervalMinutes, setIntervalMinutes] = useState("5");
   const [testUrl, setTestUrl] = useState("https://www.google.com");
+
+  const [fetchUrl, setFetchUrl] = useState("");
+  const [useProxy, setUseProxy] = useState(false);
+  const [strategy, setStrategy] = useState<"roundrobin" | "random">("roundrobin");
+  const [fetchLoading, setFetchLoading] = useState(false);
+  const [fetchResult, setFetchResult] = useState<FetchResult | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   const { data: proxiesData, isLoading: proxiesLoading, refetch: refetchProxies } = useListProxies();
   const { data: schedulerData, refetch: refetchScheduler } = useGetSchedulerStatus();
@@ -295,6 +430,32 @@ export default function Dashboard() {
     addProxiesMutation.mutate({ body: { urls } });
   };
 
+  const handleFetch = async () => {
+    const url = fetchUrl.trim();
+    if (!url) return;
+    setFetchLoading(true);
+    setFetchResult(null);
+    setFetchError(null);
+    try {
+      const params = new URLSearchParams({ url });
+      if (useProxy) {
+        params.set("proxy", "true");
+        params.set("strategy", strategy);
+      }
+      const res = await fetch(`/api/fetch-page?${params.toString()}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setFetchError(data.error ?? `请求失败 (${res.status})`);
+      } else {
+        setFetchResult(data as FetchResult);
+      }
+    } catch (e) {
+      setFetchError(e instanceof Error ? e.message : "网络错误");
+    } finally {
+      setFetchLoading(false);
+    }
+  };
+
   const proxies = proxiesData?.proxies ?? [];
   const stats = proxiesData?.stats;
   const scheduler = schedulerData;
@@ -329,10 +490,11 @@ export default function Dashboard() {
         </div>
 
         <Tabs defaultValue="proxies">
-          <TabsList className="w-full mb-4">
-            <TabsTrigger value="proxies" className="flex-1">代理池</TabsTrigger>
-            <TabsTrigger value="add" className="flex-1">添加代理</TabsTrigger>
-            <TabsTrigger value="scheduler" className="flex-1">定时任务</TabsTrigger>
+          <TabsList className="w-full mb-4 grid grid-cols-4">
+            <TabsTrigger value="proxies" className="text-xs">代理池</TabsTrigger>
+            <TabsTrigger value="add" className="text-xs">添加</TabsTrigger>
+            <TabsTrigger value="fetch" className="text-xs">抓取测试</TabsTrigger>
+            <TabsTrigger value="scheduler" className="text-xs">定时任务</TabsTrigger>
           </TabsList>
 
           <TabsContent value="proxies" className="space-y-3">
@@ -408,7 +570,7 @@ export default function Dashboard() {
 
           <TabsContent value="add" className="space-y-4">
             <div className="mb-2">
-              <label className="text-xs text-muted-foreground mb-1 block">检测目标 URL</label>
+              <label className="text-xs text-muted-foreground mb-1 block">健康检测目标 URL</label>
               <Input
                 value={testUrl}
                 onChange={(e) => setTestUrl(e.target.value)}
@@ -476,6 +638,81 @@ export default function Dashboard() {
                 </Button>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="fetch" className="space-y-3">
+            <div className="space-y-2">
+              <Input
+                value={fetchUrl}
+                onChange={(e) => setFetchUrl(e.target.value)}
+                placeholder="https://example.com"
+                className="h-9 text-sm"
+                onKeyDown={(e) => e.key === "Enter" && handleFetch()}
+              />
+
+              <div className="flex items-center gap-3 rounded-lg border p-3">
+                <div className="flex items-center gap-2 flex-1">
+                  <button
+                    onClick={() => setUseProxy(!useProxy)}
+                    className={`relative w-9 h-5 rounded-full transition-colors flex-shrink-0 ${useProxy ? "bg-primary" : "bg-muted-foreground/30"}`}
+                  >
+                    <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${useProxy ? "left-4" : "left-0.5"}`} />
+                  </button>
+                  <span className="text-sm">启用代理</span>
+                </div>
+                {useProxy && (
+                  <div className="flex rounded-md border overflow-hidden text-xs">
+                    <button
+                      className={`px-2 py-1 ${strategy === "roundrobin" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      onClick={() => setStrategy("roundrobin")}
+                    >
+                      轮询
+                    </button>
+                    <button
+                      className={`px-2 py-1 ${strategy === "random" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      onClick={() => setStrategy("random")}
+                    >
+                      随机
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {useProxy && aliveProxies.length === 0 && (
+                <p className="text-xs text-orange-500 flex items-center gap-1">
+                  <XCircle className="w-3 h-3" />
+                  当前无存活代理，请先添加并检测
+                </p>
+              )}
+
+              <Button
+                className="w-full h-9"
+                onClick={handleFetch}
+                disabled={!fetchUrl.trim() || fetchLoading || (useProxy && aliveProxies.length === 0)}
+              >
+                <Search className="w-4 h-4 mr-1" />
+                {fetchLoading ? "抓取中…" : "开始抓取"}
+              </Button>
+            </div>
+
+            {fetchLoading && (
+              <div className="text-center py-8 text-muted-foreground">
+                <RefreshCw className="w-6 h-6 mx-auto mb-2 animate-spin" />
+                <p className="text-sm">正在抓取页面…</p>
+              </div>
+            )}
+
+            {fetchError && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 flex items-start gap-2">
+                <XCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-700">抓取失败</p>
+                  <p className="text-xs text-red-600 mt-0.5">{fetchError}</p>
+                </div>
+              </div>
+            )}
+
+            {fetchResult && <FetchResultView result={fetchResult} />}
           </TabsContent>
 
           <TabsContent value="scheduler" className="space-y-4">
