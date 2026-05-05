@@ -1,5 +1,5 @@
 import { ProxyAgent, fetch as undiciFetch } from "undici";
-import { pickProxy, recordSuccess, recordFailure, type ProxyEntry } from "./proxy-pool";
+import { pickProxy, recordSuccess, recordFailure, aliveProxyCount, type ProxyEntry } from "./proxy-pool";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -34,6 +34,8 @@ export interface FetchResult {
   body: string;
   finalUrl: string;
   proxyUsed?: string;
+  retriedProxies?: string[];
+  fallbackToDirect?: boolean;
 }
 
 export interface HumanFetchOptions {
@@ -43,6 +45,10 @@ export interface HumanFetchOptions {
   useProxy?: boolean;
   proxyStrategy?: "random" | "roundrobin";
   forceProxy?: string;
+  /** 代理全部失败时是否自动回退直连，默认 true */
+  fallbackToDirect?: boolean;
+  /** 最多尝试几个不同代理，默认 3 */
+  maxProxyRetries?: number;
 }
 
 function buildHeaders(referer?: string, cookies?: string): Record<string, string> {
@@ -145,33 +151,57 @@ export async function humanFetch(
     cookies,
     useProxy = false,
     proxyStrategy = "roundrobin",
+    fallbackToDirect = true,
+    maxProxyRetries = 3,
   } = options;
 
   const headers = buildHeaders(referer, cookies);
 
-  if (useProxy) {
-    const proxy = pickProxy(proxyStrategy);
+  if (!useProxy) {
+    const result = await fetchDirect(targetUrl, headers, timeoutMs);
+    return { url: targetUrl, ...result };
+  }
 
-    if (proxy) {
-      const start = Date.now();
-      try {
-        const result = await fetchViaProxy(targetUrl, proxy, headers, timeoutMs);
-        recordSuccess(proxy.id, Date.now() - start);
-        return {
-          url: targetUrl,
-          ...result,
-          proxyUsed: proxy.url,
-        };
-      } catch (err) {
-        recordFailure(proxy.id);
-        throw err;
-      }
+  // --- 代理重试轮换逻辑 ---
+  const totalAlive = aliveProxyCount();
+  const maxAttempts = Math.min(maxProxyRetries, totalAlive);
+  const triedIds = new Set<string>();
+  const retriedProxies: string[] = [];
+  let lastError: unknown;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    const proxy = pickProxy(proxyStrategy, triedIds);
+    if (!proxy) break;
+
+    triedIds.add(proxy.id);
+    if (attempt > 0) retriedProxies.push(proxy.url);
+
+    const start = Date.now();
+    try {
+      const result = await fetchViaProxy(targetUrl, proxy, headers, timeoutMs);
+      recordSuccess(proxy.id, Date.now() - start);
+      return {
+        url: targetUrl,
+        ...result,
+        proxyUsed: proxy.url,
+        retriedProxies: retriedProxies.length > 0 ? retriedProxies : undefined,
+      };
+    } catch (err) {
+      recordFailure(proxy.id);
+      lastError = err;
     }
   }
 
-  const result = await fetchDirect(targetUrl, headers, timeoutMs);
-  return {
-    url: targetUrl,
-    ...result,
-  };
+  // 全部代理失败 — 决定是否回退直连
+  if (fallbackToDirect) {
+    const result = await fetchDirect(targetUrl, headers, timeoutMs);
+    return {
+      url: targetUrl,
+      ...result,
+      fallbackToDirect: true,
+      retriedProxies: retriedProxies.length > 0 ? retriedProxies : undefined,
+    };
+  }
+
+  throw lastError ?? new Error("所有代理均失败且未启用直连回退");
 }

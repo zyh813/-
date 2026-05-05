@@ -15,6 +15,8 @@ interface UrlTask {
   cookies?: string;
   useProxy?: boolean;
   proxyStrategy?: "random" | "roundrobin";
+  fallbackToDirect?: boolean;
+  maxProxyRetries?: number;
 }
 
 interface PageResult {
@@ -40,6 +42,8 @@ async function fetchWithDelay(
       cookies: task.cookies,
       useProxy: task.useProxy,
       proxyStrategy: task.proxyStrategy,
+      fallbackToDirect: task.fallbackToDirect ?? true,
+      maxProxyRetries: task.maxProxyRetries ?? 3,
     });
     const parsed = parseHtml(result.body, result.finalUrl);
     return {
@@ -86,6 +90,8 @@ router.post("/fetch-pages", async (req, res) => {
     cookies?: string;
     useProxy?: boolean;
     proxyStrategy?: "random" | "roundrobin";
+    fallbackToDirect?: boolean;
+    maxProxyRetries?: number;
   };
 
   if (!Array.isArray(body.urls) || body.urls.length === 0) {
@@ -124,6 +130,8 @@ router.post("/fetch-pages", async (req, res) => {
         proxyStrategy: isObj
           ? ((item as { proxyStrategy?: "random" | "roundrobin" }).proxyStrategy ?? body.proxyStrategy)
           : body.proxyStrategy,
+        fallbackToDirect: body.fallbackToDirect,
+        maxProxyRetries: body.maxProxyRetries,
       });
     } catch {
       invalid.push(String(item));

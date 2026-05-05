@@ -160,8 +160,13 @@ export function markDead(id: string): void {
   }).catch(() => {});
 }
 
-export function pickProxy(strategy: "random" | "roundrobin" = "roundrobin"): ProxyEntry | null {
-  const alive = Array.from(pool.proxies.values()).filter((p) => p.alive);
+export function pickProxy(
+  strategy: "random" | "roundrobin" = "roundrobin",
+  excludeIds: Set<string> = new Set()
+): ProxyEntry | null {
+  const alive = Array.from(pool.proxies.values()).filter(
+    (p) => p.alive && !excludeIds.has(p.id)
+  );
   if (alive.length === 0) return null;
 
   if (strategy === "random") {
@@ -171,6 +176,10 @@ export function pickProxy(strategy: "random" | "roundrobin" = "roundrobin"): Pro
   const index = pool.roundRobinIndex % alive.length;
   pool.roundRobinIndex = (pool.roundRobinIndex + 1) % alive.length;
   return alive[index];
+}
+
+export function aliveProxyCount(): number {
+  return Array.from(pool.proxies.values()).filter((p) => p.alive).length;
 }
 
 export function poolStats() {

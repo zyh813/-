@@ -187,6 +187,8 @@ type FetchResult = {
   statusCode: number;
   contentType: string;
   proxyUsed: string | null;
+  retriedProxies: string[];
+  fallbackToDirect: boolean;
   parsed: {
     title: string | null;
     metaDescription: string | null;
@@ -259,6 +261,16 @@ function FetchResultView({ result, durationMs }: { result: FetchResult; duration
         </div>
         <p className="text-xs text-muted-foreground truncate">{result.finalUrl}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{result.contentType}</p>
+        {result.fallbackToDirect && (
+          <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
+            <WifiOff className="w-3 h-3" />代理全部失败，已自动回退直连
+          </p>
+        )}
+        {result.retriedProxies && result.retriedProxies.length > 0 && (
+          <p className="text-xs text-muted-foreground mt-0.5">
+            换用代理 {result.retriedProxies.length} 次
+          </p>
+        )}
       </div>
 
       {result.parsed.title && (
