@@ -54,6 +54,7 @@ import {
   Copy,
   Check,
   Upload,
+  ArrowUpDown,
 } from "lucide-react";
 
 function StatCard({
@@ -366,6 +367,7 @@ export default function Dashboard() {
   const [batchText, setBatchText] = useState("");
   const [showExport, setShowExport] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
+  const [sortByLatency, setSortByLatency] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState("5");
   const [testUrl, setTestUrl] = useState("https://www.google.com");
 
@@ -426,6 +428,7 @@ export default function Dashboard() {
           description: `存活 ${data.stats.alive} / 共 ${data.total}`,
         });
         invalidate();
+        if (data.stats.alive > 0) setSortByLatency(true);
       },
     },
   });
@@ -543,7 +546,14 @@ export default function Dashboard() {
   const stats = proxiesData?.stats;
   const scheduler = schedulerData;
 
-  const aliveProxies = proxies.filter((p) => p.alive);
+  const aliveRaw = proxies.filter((p) => p.alive);
+  const aliveProxies = sortByLatency
+    ? [...aliveRaw].sort((a, b) => {
+        const la = a.latencyMs ?? Infinity;
+        const lb = b.latencyMs ?? Infinity;
+        return la - lb;
+      })
+    : aliveRaw;
   const deadProxies = proxies.filter((p) => !p.alive);
 
   const exportText = proxies
@@ -619,6 +629,17 @@ export default function Dashboard() {
               >
                 <Activity className="w-4 h-4 mr-1" />
                 {checkAllMutation.isPending ? "检测中…" : "检测全部"}
+              </Button>
+              <Button
+                variant={sortByLatency ? "default" : "outline"}
+                size="sm"
+                className="h-9"
+                disabled={aliveRaw.length === 0}
+                onClick={() => setSortByLatency((v) => !v)}
+                title={sortByLatency ? "取消延迟排序" : "按延迟从低到高排序"}
+              >
+                <ArrowUpDown className="w-4 h-4 mr-1" />
+                延迟
               </Button>
               <Button
                 variant="outline"
@@ -703,7 +724,14 @@ export default function Dashboard() {
               <div>
                 {aliveProxies.length > 0 && (
                   <div className="mb-2">
-                    <p className="text-xs font-medium text-green-600 mb-1">存活 ({aliveProxies.length})</p>
+                    <div className="flex items-center gap-1.5 mb-1">
+                      <p className="text-xs font-medium text-green-600">存活 ({aliveProxies.length})</p>
+                      {sortByLatency && (
+                        <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                          <ArrowUpDown className="w-3 h-3" />按延迟排序
+                        </span>
+                      )}
+                    </div>
                     {aliveProxies.map((p) => (
                       <ProxyRow
                         key={p.id}
