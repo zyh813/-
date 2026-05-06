@@ -50,6 +50,10 @@ import {
   CheckCircle,
   XCircle,
   Link,
+  FileDown,
+  Copy,
+  Check,
+  Upload,
 } from "lucide-react";
 
 function StatCard({
@@ -360,6 +364,8 @@ export default function Dashboard() {
   const [singleUrl, setSingleUrl] = useState("");
   const [singleLabel, setSingleLabel] = useState("");
   const [batchText, setBatchText] = useState("");
+  const [showExport, setShowExport] = useState(false);
+  const [copyDone, setCopyDone] = useState(false);
   const [intervalMinutes, setIntervalMinutes] = useState("5");
   const [testUrl, setTestUrl] = useState("https://www.google.com");
 
@@ -466,7 +472,7 @@ export default function Dashboard() {
 
   const handleAddSingle = () => {
     if (!singleUrl.trim()) return;
-    addProxiesMutation.mutate({ body: { url: singleUrl.trim(), label: singleLabel.trim() || undefined } });
+    addProxiesMutation.mutate({ data: { url: singleUrl.trim(), label: singleLabel.trim() || undefined } });
   };
 
   const handleAddBatch = () => {
@@ -476,7 +482,7 @@ export default function Dashboard() {
       return { url: parts[0], label: parts[1] || undefined };
     });
     if (urls.length === 0) return;
-    addProxiesMutation.mutate({ body: { urls } });
+    addProxiesMutation.mutate({ data: { urls } });
   };
 
   const handleFetch = async () => {
@@ -540,6 +546,34 @@ export default function Dashboard() {
   const aliveProxies = proxies.filter((p) => p.alive);
   const deadProxies = proxies.filter((p) => !p.alive);
 
+  const exportText = proxies
+    .map((p) => (p.label ? `${p.url} ${p.label}` : p.url))
+    .join("\n");
+
+  const handleCopyExport = async () => {
+    try {
+      await navigator.clipboard.writeText(exportText);
+      setCopyDone(true);
+      setTimeout(() => setCopyDone(false), 2000);
+      toast({ title: `已复制 ${proxies.length} 个代理` });
+    } catch {
+      toast({ title: "复制失败，请手动选择文本", variant: "destructive" });
+    }
+  };
+
+  const handleDownloadExport = () => {
+    const blob = new Blob([exportText], { type: "text/plain;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `proxies-${new Date().toISOString().slice(0, 10)}.txt`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+
+  const handleImportFromExport = (text: string) => {
+    setBatchText(text);
+  };
+
   return (
     <div className="min-h-screen bg-background">
       <div className="max-w-2xl mx-auto px-4 pb-10">
@@ -580,11 +614,21 @@ export default function Dashboard() {
                 variant="outline"
                 size="sm"
                 className="flex-1 h-9"
-                onClick={() => checkAllMutation.mutate({ body: { testUrl } })}
+                onClick={() => checkAllMutation.mutate({ data: { testUrl } })}
                 disabled={checkAllMutation.isPending || proxies.length === 0}
               >
                 <Activity className="w-4 h-4 mr-1" />
                 {checkAllMutation.isPending ? "检测中…" : "检测全部"}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-9"
+                disabled={proxies.length === 0}
+                onClick={() => setShowExport((v) => !v)}
+              >
+                <FileDown className="w-4 h-4 mr-1" />
+                导出
               </Button>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
@@ -606,6 +650,48 @@ export default function Dashboard() {
               </AlertDialog>
             </div>
 
+            {showExport && (
+              <div className="rounded-lg border p-3 space-y-2 bg-muted/30">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-medium text-muted-foreground">
+                    导出列表（共 {proxies.length} 个代理）
+                  </p>
+                  <div className="flex gap-1.5">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={handleDownloadExport}
+                    >
+                      <FileDown className="w-3 h-3 mr-1" />
+                      下载
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 text-xs px-2"
+                      onClick={handleCopyExport}
+                    >
+                      {copyDone ? (
+                        <><Check className="w-3 h-3 mr-1 text-green-500" /><span className="text-green-500">已复制</span></>
+                      ) : (
+                        <><Copy className="w-3 h-3 mr-1" />复制全部</>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+                <textarea
+                  readOnly
+                  value={exportText}
+                  className="w-full h-32 rounded-md border border-input bg-background px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                  onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                />
+                <p className="text-xs text-muted-foreground">
+                  格式：<code className="bg-muted px-1 rounded">url 备注</code>，可直接粘贴到「添加→批量添加」导入
+                </p>
+              </div>
+            )}
+
             {proxiesLoading ? (
               <div className="text-center py-10 text-muted-foreground text-sm">加载中…</div>
             ) : proxies.length === 0 ? (
@@ -623,7 +709,7 @@ export default function Dashboard() {
                         key={p.id}
                         proxy={p}
                         onDelete={(id) => deleteProxyMutation.mutate({ id })}
-                        onCheck={(id) => checkOneMutation.mutate({ id, body: { testUrl } })}
+                        onCheck={(id) => checkOneMutation.mutate({ id, data: { testUrl } })}
                       />
                     ))}
                   </div>
@@ -636,7 +722,7 @@ export default function Dashboard() {
                         key={p.id}
                         proxy={p}
                         onDelete={(id) => deleteProxyMutation.mutate({ id })}
-                        onCheck={(id) => checkOneMutation.mutate({ id, body: { testUrl } })}
+                        onCheck={(id) => checkOneMutation.mutate({ id, data: { testUrl } })}
                       />
                     ))}
                   </div>
@@ -696,15 +782,47 @@ export default function Dashboard() {
               </div>
             ) : (
               <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">每行一个代理：<code className="bg-muted px-1 rounded">url 备注</code></p>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 text-xs px-2"
+                    onClick={async () => {
+                      try {
+                        const text = await navigator.clipboard.readText();
+                        if (text.trim()) {
+                          handleImportFromExport(text.trim());
+                          toast({ title: "已从剪贴板导入" });
+                        }
+                      } catch {
+                        toast({ title: "无法读取剪贴板，请手动粘贴", variant: "destructive" });
+                      }
+                    }}
+                  >
+                    <Upload className="w-3 h-3 mr-1" />
+                    从剪贴板导入
+                  </Button>
+                </div>
                 <textarea
                   value={batchText}
                   onChange={(e) => setBatchText(e.target.value)}
-                  placeholder={"每行一个代理，格式：\nhttp://host:port 备注\nsocks5://host:port\n..."}
-                  className="w-full h-40 rounded-md border border-input bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder={"http://host:port 节点A\nsocks5://host:port 节点B\nhttp://host:port"}
+                  className="w-full h-40 rounded-md border border-input bg-background px-3 py-2 text-sm font-mono resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                 />
-                <p className="text-xs text-muted-foreground">
-                  共 {batchText.trim().split("\n").filter(Boolean).length} 行
-                </p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    共 {batchText.trim().split("\n").filter(Boolean).length} 行
+                  </p>
+                  {batchText.trim() && (
+                    <button
+                      className="text-xs text-muted-foreground hover:text-destructive"
+                      onClick={() => setBatchText("")}
+                    >
+                      清空
+                    </button>
+                  )}
+                </div>
                 <Button
                   className="w-full h-9"
                   onClick={handleAddBatch}
@@ -906,7 +1024,7 @@ export default function Dashboard() {
                 className="h-9 col-span-1"
                 onClick={() =>
                   startSchedulerMutation.mutate({
-                    body: { intervalMinutes: Number(intervalMinutes), testUrl },
+                    data: { intervalMinutes: Number(intervalMinutes), testUrl },
                   })
                 }
                 disabled={startSchedulerMutation.isPending}
