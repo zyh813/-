@@ -55,6 +55,7 @@ import {
   Check,
   Upload,
   ArrowUpDown,
+  Star,
 } from "lucide-react";
 
 function StatCard({
@@ -83,7 +84,7 @@ function StatCard({
   );
 }
 
-function ProxyRow({ proxy, onDelete, onCheck }: {
+function ProxyRow({ proxy, onDelete, onCheck, isPreferred, onSetPreferred }: {
   proxy: {
     id: string;
     url: string;
@@ -98,24 +99,33 @@ function ProxyRow({ proxy, onDelete, onCheck }: {
   };
   onDelete: (id: string) => void;
   onCheck: (id: string) => void;
+  isPreferred: boolean;
+  onSetPreferred: (id: string | null) => void;
 }) {
   const [expanded, setExpanded] = useState(false);
 
   return (
-    <div className="border rounded-lg mb-2 overflow-hidden">
+    <div className={`border rounded-lg mb-2 overflow-hidden ${isPreferred ? "border-yellow-400 ring-1 ring-yellow-300" : ""}`}>
       <div
         className="flex items-center gap-2 p-3 cursor-pointer hover:bg-muted/50"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex-shrink-0">
-          {proxy.alive ? (
+          {isPreferred ? (
+            <Star className="w-4 h-4 text-yellow-400 fill-yellow-400" />
+          ) : proxy.alive ? (
             <Wifi className="w-4 h-4 text-green-500" />
           ) : (
             <WifiOff className="w-4 h-4 text-red-400" />
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-medium truncate">{proxy.url}</p>
+          <div className="flex items-center gap-1.5">
+            <p className="text-sm font-medium truncate">{proxy.url}</p>
+            {isPreferred && (
+              <span className="text-xs text-yellow-600 font-medium flex-shrink-0">首选</span>
+            )}
+          </div>
           {proxy.label && (
             <p className="text-xs text-muted-foreground truncate">{proxy.label}</p>
           )}
@@ -163,6 +173,15 @@ function ProxyRow({ proxy, onDelete, onCheck }: {
           <div className="flex gap-2">
             <Button
               size="sm"
+              variant={isPreferred ? "default" : "outline"}
+              className={`flex-1 h-8 text-xs ${isPreferred ? "bg-yellow-400 hover:bg-yellow-500 text-yellow-950 border-yellow-400" : ""}`}
+              onClick={(e) => { e.stopPropagation(); onSetPreferred(isPreferred ? null : proxy.id); }}
+            >
+              <Star className={`w-3 h-3 mr-1 ${isPreferred ? "fill-yellow-950" : ""}`} />
+              {isPreferred ? "取消首选" : "设为首选"}
+            </Button>
+            <Button
+              size="sm"
               variant="outline"
               className="flex-1 h-8 text-xs"
               onClick={(e) => { e.stopPropagation(); onCheck(proxy.id); }}
@@ -194,6 +213,7 @@ type FetchResult = {
   proxyUsed: string | null;
   retriedProxies: string[];
   fallbackToDirect: boolean;
+  preferredProxyUsed: boolean;
   parsed: {
     title: string | null;
     metaDescription: string | null;
@@ -256,16 +276,26 @@ function FetchResultView({ result, durationMs }: { result: FetchResult; duration
           <span className="text-xs text-muted-foreground flex items-center gap-0.5">
             <Clock className="w-3 h-3" />{durationMs}ms
           </span>
-          {result.proxyUsed ? (
-            <Badge variant="outline" className="text-xs ml-auto truncate max-w-[120px]">
-              {result.proxyUsed}
-            </Badge>
-          ) : (
-            <Badge variant="secondary" className="text-xs ml-auto">直连</Badge>
-          )}
+          <div className="ml-auto flex items-center gap-1">
+            {result.preferredProxyUsed && (
+              <Star className="w-3 h-3 text-yellow-400 fill-yellow-400 flex-shrink-0" />
+            )}
+            {result.proxyUsed ? (
+              <Badge variant="outline" className="text-xs truncate max-w-[120px]">
+                {result.proxyUsed}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="text-xs">直连</Badge>
+            )}
+          </div>
         </div>
         <p className="text-xs text-muted-foreground truncate">{result.finalUrl}</p>
         <p className="text-xs text-muted-foreground mt-0.5">{result.contentType}</p>
+        {result.preferredProxyUsed && (
+          <p className="text-xs text-yellow-600 mt-1 flex items-center gap-1">
+            <Star className="w-3 h-3 fill-yellow-400 text-yellow-400" />已使用首选代理
+          </p>
+        )}
         {result.fallbackToDirect && (
           <p className="text-xs text-orange-500 mt-1 flex items-center gap-1">
             <WifiOff className="w-3 h-3" />代理全部失败，已自动回退直连
@@ -368,8 +398,17 @@ export default function Dashboard() {
   const [showExport, setShowExport] = useState(false);
   const [copyDone, setCopyDone] = useState(false);
   const [sortByLatency, setSortByLatency] = useState(false);
+  const [preferredProxyId, setPreferredProxyId] = useState<string | null>(
+    () => localStorage.getItem("preferredProxyId")
+  );
   const [intervalMinutes, setIntervalMinutes] = useState("5");
   const [testUrl, setTestUrl] = useState("https://www.google.com");
+
+  const handleSetPreferred = (id: string | null) => {
+    setPreferredProxyId(id);
+    if (id) localStorage.setItem("preferredProxyId", id);
+    else localStorage.removeItem("preferredProxyId");
+  };
 
   const [fetchUrl, setFetchUrl] = useState("");
   const [useProxy, setUseProxy] = useState(false);
@@ -502,6 +541,7 @@ export default function Dashboard() {
       if (useProxy) {
         params.set("proxy", "true");
         params.set("strategy", strategy);
+        if (preferredProxyId) params.set("proxyId", preferredProxyId);
       }
       const res = await fetch(`/api/fetch-page?${params.toString()}`);
       const durationMs = Math.round(performance.now() - t0);
@@ -547,14 +587,27 @@ export default function Dashboard() {
   const scheduler = schedulerData;
 
   const aliveRaw = proxies.filter((p) => p.alive);
-  const aliveProxies = sortByLatency
-    ? [...aliveRaw].sort((a, b) => {
-        const la = a.latencyMs ?? Infinity;
-        const lb = b.latencyMs ?? Infinity;
-        return la - lb;
-      })
-    : aliveRaw;
+  const aliveProxies = (() => {
+    let list = sortByLatency
+      ? [...aliveRaw].sort((a, b) => {
+          const la = a.latencyMs ?? Infinity;
+          const lb = b.latencyMs ?? Infinity;
+          return la - lb;
+        })
+      : [...aliveRaw];
+    // 首选代理始终置顶
+    if (preferredProxyId) {
+      const idx = list.findIndex((p) => p.id === preferredProxyId);
+      if (idx > 0) {
+        const [preferred] = list.splice(idx, 1);
+        list.unshift(preferred);
+      }
+    }
+    return list;
+  })();
   const deadProxies = proxies.filter((p) => !p.alive);
+
+  const preferredProxy = preferredProxyId ? proxies.find((p) => p.id === preferredProxyId) : null;
 
   const exportText = proxies
     .map((p) => (p.label ? `${p.url} ${p.label}` : p.url))
@@ -738,6 +791,8 @@ export default function Dashboard() {
                         proxy={p}
                         onDelete={(id) => deleteProxyMutation.mutate({ id })}
                         onCheck={(id) => checkOneMutation.mutate({ id, data: { testUrl } })}
+                        isPreferred={p.id === preferredProxyId}
+                        onSetPreferred={handleSetPreferred}
                       />
                     ))}
                   </div>
@@ -751,6 +806,8 @@ export default function Dashboard() {
                         proxy={p}
                         onDelete={(id) => deleteProxyMutation.mutate({ id })}
                         onCheck={(id) => checkOneMutation.mutate({ id, data: { testUrl } })}
+                        isPreferred={p.id === preferredProxyId}
+                        onSetPreferred={handleSetPreferred}
                       />
                     ))}
                   </div>
@@ -906,6 +963,22 @@ export default function Dashboard() {
                   <XCircle className="w-3 h-3" />
                   当前无存活代理，请先添加并检测
                 </p>
+              )}
+
+              {useProxy && preferredProxy && (
+                <div className="flex items-center gap-2 rounded-lg border border-yellow-300 bg-yellow-50 px-3 py-2">
+                  <Star className="w-3.5 h-3.5 text-yellow-500 fill-yellow-400 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-yellow-800">将优先使用首选代理</p>
+                    <p className="text-xs text-yellow-600 truncate">{preferredProxy.url}</p>
+                  </div>
+                  <button
+                    className="text-xs text-yellow-600 hover:text-yellow-800 flex-shrink-0"
+                    onClick={() => handleSetPreferred(null)}
+                  >
+                    取消
+                  </button>
+                </div>
               )}
 
               <Button

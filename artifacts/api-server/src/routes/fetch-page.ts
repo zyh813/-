@@ -41,6 +41,7 @@ router.get("/fetch-page", async (req, res) => {
   const cookies = req.query.cookies as string | undefined;
   const useProxy = req.query.proxy === "true";
   const proxyStrategy = (req.query.strategy as "random" | "roundrobin" | undefined) ?? "roundrobin";
+  const preferredProxyId = req.query.proxyId as string | undefined;
   const fallbackToDirect = req.query.fallback !== "false";
   const maxProxyRetries = Math.min(Number(req.query.retries ?? "3"), 10);
 
@@ -61,7 +62,7 @@ router.get("/fetch-page", async (req, res) => {
   }
 
   try {
-    const result = await humanFetch(targetUrl, { referer, cookies, useProxy, proxyStrategy, fallbackToDirect, maxProxyRetries });
+    const result = await humanFetch(targetUrl, { referer, cookies, useProxy, proxyStrategy, preferredProxyId, fallbackToDirect, maxProxyRetries });
     const parsedContent = parseHtml(result.body, result.finalUrl);
 
     req.log.info({ url: targetUrl, statusCode: result.statusCode, proxy: result.proxyUsed ?? "直连" }, "fetch-page 成功");
@@ -74,6 +75,7 @@ router.get("/fetch-page", async (req, res) => {
       proxyUsed: result.proxyUsed ?? null,
       retriedProxies: result.retriedProxies ?? [],
       fallbackToDirect: result.fallbackToDirect ?? false,
+      preferredProxyUsed: result.preferredProxyUsed ?? false,
       parsed: parsedContent,
       rawBody: result.body,
     });

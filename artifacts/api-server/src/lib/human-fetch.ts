@@ -1,5 +1,5 @@
 import { ProxyAgent, fetch as undiciFetch } from "undici";
-import { pickProxy, recordSuccess, recordFailure, aliveProxyCount, type ProxyEntry } from "./proxy-pool";
+import { pickProxy, getProxy, recordSuccess, recordFailure, aliveProxyCount, type ProxyEntry } from "./proxy-pool";
 
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
@@ -36,6 +36,7 @@ export interface FetchResult {
   proxyUsed?: string;
   retriedProxies?: string[];
   fallbackToDirect?: boolean;
+  preferredProxyUsed?: boolean;
 }
 
 export interface HumanFetchOptions {
@@ -45,6 +46,8 @@ export interface HumanFetchOptions {
   useProxy?: boolean;
   proxyStrategy?: "random" | "roundrobin";
   forceProxy?: string;
+  /** 优先使用指定 ID 的代理，失败后再走正常轮换 */
+  preferredProxyId?: string;
   /** 代理全部失败时是否自动回退直连，默认 true */
   fallbackToDirect?: boolean;
   /** 最多尝试几个不同代理，默认 3 */
@@ -151,6 +154,7 @@ export async function humanFetch(
     cookies,
     useProxy = false,
     proxyStrategy = "roundrobin",
+    preferredProxyId,
     fallbackToDirect = true,
     maxProxyRetries = 3,
   } = options;
@@ -164,12 +168,37 @@ export async function humanFetch(
 
   // --- 代理重试轮换逻辑 ---
   const totalAlive = aliveProxyCount();
-  const maxAttempts = Math.min(maxProxyRetries, totalAlive);
+  const maxAttempts = Math.min(maxProxyRetries, Math.max(totalAlive, preferredProxyId ? 1 : 0));
   const triedIds = new Set<string>();
   const retriedProxies: string[] = [];
   let lastError: unknown;
+  let attempt = 0;
 
-  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  // 首选代理：先尝试一次
+  if (preferredProxyId) {
+    const preferred = getProxy(preferredProxyId);
+    if (preferred && preferred.alive) {
+      triedIds.add(preferred.id);
+      const start = Date.now();
+      try {
+        const result = await fetchViaProxy(targetUrl, preferred, headers, timeoutMs);
+        recordSuccess(preferred.id, Date.now() - start);
+        return {
+          url: targetUrl,
+          ...result,
+          proxyUsed: preferred.url,
+          preferredProxyUsed: true,
+        };
+      } catch (err) {
+        recordFailure(preferred.id);
+        lastError = err;
+        retriedProxies.push(preferred.url);
+      }
+      attempt = 1;
+    }
+  }
+
+  for (; attempt < maxAttempts; attempt++) {
     const proxy = pickProxy(proxyStrategy, triedIds);
     if (!proxy) break;
 
