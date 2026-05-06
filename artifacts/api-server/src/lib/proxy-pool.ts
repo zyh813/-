@@ -100,6 +100,18 @@ export function clearProxies(): void {
   deleteAllProxiesFromDb().catch(() => {});
 }
 
+export function removeDeadProxies(): { removed: number; ids: string[] } {
+  const deadIds: string[] = [];
+  for (const [id, entry] of pool.proxies.entries()) {
+    if (!entry.alive) {
+      pool.proxies.delete(id);
+      deadIds.push(id);
+      deleteProxyFromDb(id).catch(() => {});
+    }
+  }
+  return { removed: deadIds.length, ids: deadIds };
+}
+
 export function recordSuccess(id: string, latencyMs: number): void {
   const entry = pool.proxies.get(id);
   if (!entry) return;

@@ -5,6 +5,7 @@ import {
   removeProxy,
   listProxies,
   clearProxies,
+  removeDeadProxies,
   poolStats,
   markAlive,
   markDead,
@@ -61,6 +62,12 @@ router.delete("/proxies", (req, res) => {
   clearProxies();
   req.log.info("清空代理池");
   res.json({ message: "代理池已清空" });
+});
+
+router.delete("/proxies/dead", (req, res) => {
+  const { removed } = removeDeadProxies();
+  req.log.info({ removed }, "清除失效代理");
+  res.json({ removed, message: `已清除 ${removed} 个失效代理` });
 });
 
 router.delete("/proxies/:id", (req, res) => {

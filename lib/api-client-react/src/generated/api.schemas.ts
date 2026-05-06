@@ -85,6 +85,11 @@ export type AddProxiesBody = {
 
 export type AddProxies201 = { [key: string]: unknown };
 
+export type ClearDeadProxies200 = {
+  removed: number;
+  message: string;
+};
+
 export type CheckAllProxiesBody = {
   testUrl?: string;
 };

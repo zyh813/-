@@ -5,6 +5,7 @@ import {
   useAddProxies,
   useDeleteProxy,
   useClearProxies,
+  useClearDeadProxies,
   useCheckAllProxies,
   useCheckProxy,
   useGetSchedulerStatus,
@@ -440,6 +441,16 @@ export default function Dashboard() {
     },
   });
 
+  const clearDeadMutation = useClearDeadProxies({
+    mutation: {
+      onSuccess: (data) => {
+        toast({ title: `已清除 ${data.removed} 个失效代理` });
+        invalidate();
+      },
+      onError: () => toast({ title: "清除失败", variant: "destructive" }),
+    },
+  });
+
   const deleteProxyMutation = useDeleteProxy({
     mutation: {
       onSuccess: () => {
@@ -704,6 +715,31 @@ export default function Dashboard() {
                 <FileDown className="w-4 h-4 mr-1" />
                 导出
               </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9 text-orange-500 hover:text-orange-600 border-orange-200 hover:border-orange-300"
+                    disabled={deadProxies.length === 0 || clearDeadMutation.isPending}
+                  >
+                    <Trash2 className="w-4 h-4 mr-1" />
+                    清失效
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>清除所有失效代理？</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      将删除 {deadProxies.length} 个失效代理，存活代理（{aliveRaw.length} 个）不受影响。此操作不可撤销。
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearDeadMutation.mutate()}>确认清除</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive" disabled={proxies.length === 0}>

@@ -23,6 +23,7 @@ import type {
   CheckAllResponse,
   CheckProxy200,
   CheckProxyBody,
+  ClearDeadProxies200,
   ErrorResponse,
   HealthStatus,
   MessageResponse,
@@ -356,6 +357,87 @@ export const useClearProxies = <
   TContext
 > => {
   return useMutation(getClearProxiesMutationOptions(options));
+};
+
+/**
+ * @summary Remove all dead proxies from the pool
+ */
+export const getClearDeadProxiesUrl = () => {
+  return `/api/proxies/dead`;
+};
+
+export const clearDeadProxies = async (
+  options?: RequestInit,
+): Promise<ClearDeadProxies200> => {
+  return customFetch<ClearDeadProxies200>(getClearDeadProxiesUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getClearDeadProxiesMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearDeadProxies>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clearDeadProxies>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["clearDeadProxies"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clearDeadProxies>>,
+    void
+  > = () => {
+    return clearDeadProxies(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClearDeadProxiesMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clearDeadProxies>>
+>;
+
+export type ClearDeadProxiesMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Remove all dead proxies from the pool
+ */
+export const useClearDeadProxies = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearDeadProxies>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof clearDeadProxies>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getClearDeadProxiesMutationOptions(options));
 };
 
 /**

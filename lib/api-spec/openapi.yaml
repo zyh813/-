@@ -88,6 +88,25 @@ paths:
               schema:
                 $ref: "#/components/schemas/MessageResponse"
 
+  /proxies/dead:
+    delete:
+      operationId: clearDeadProxies
+      tags: [proxies]
+      summary: Remove all dead proxies from the pool
+      responses:
+        "200":
+          description: Dead proxies removed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [removed, message]
+                properties:
+                  removed:
+                    type: integer
+                  message:
+                    type: string
+
   /proxies/check-all:
     post:
       operationId: checkAllProxies

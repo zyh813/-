@@ -65,6 +65,14 @@ export const ClearProxiesResponse = zod.object({
 });
 
 /**
+ * @summary Remove all dead proxies from the pool
+ */
+export const ClearDeadProxiesResponse = zod.object({
+  removed: zod.number(),
+  message: zod.string(),
+});
+
+/**
  * @summary Check health of all proxies
  */
 export const CheckAllProxiesBody = zod.object({
