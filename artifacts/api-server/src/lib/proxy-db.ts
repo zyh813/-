@@ -113,6 +113,7 @@ export async function loadSchedulerConfigFromDb(): Promise<{
   enabled: boolean;
   intervalMs: number;
   testUrl: string;
+  autoClearDead: boolean;
 } | null> {
   try {
     const rows = await db
@@ -121,7 +122,7 @@ export async function loadSchedulerConfigFromDb(): Promise<{
       .where(eq(schedulerConfigTable.key, SCHEDULER_KEY));
     if (rows.length === 0) return null;
     const row = rows[0];
-    return { enabled: row.enabled, intervalMs: row.intervalMs, testUrl: row.testUrl };
+    return { enabled: row.enabled, intervalMs: row.intervalMs, testUrl: row.testUrl, autoClearDead: row.autoClearDead };
   } catch (err) {
     logger.error({ err }, "proxy-db: 加载调度器配置失败");
     return null;
@@ -132,6 +133,7 @@ export async function saveSchedulerConfigToDb(config: {
   enabled: boolean;
   intervalMs: number;
   testUrl: string;
+  autoClearDead: boolean;
 }): Promise<void> {
   try {
     await db

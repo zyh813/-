@@ -7,6 +7,7 @@ export const schedulerConfigTable = pgTable("scheduler_config", {
   enabled: boolean("enabled").notNull().default(false),
   intervalMs: integer("interval_ms").notNull().default(300000),
   testUrl: text("test_url").notNull().default("https://httpbin.org/ip"),
+  autoClearDead: boolean("auto_clear_dead").notNull().default(false),
 });
 
 export const insertSchedulerConfigSchema = createInsertSchema(schedulerConfigTable);

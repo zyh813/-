@@ -105,8 +105,10 @@ export const GetSchedulerStatusResponse = zod.object({
   intervalMs: zod.number(),
   intervalMinutes: zod.number(),
   testUrl: zod.string(),
+  autoClearDead: zod.boolean().optional(),
   lastRunAt: zod.string().nullish(),
   nextRunAt: zod.string().nullish(),
+  lastAutoClearedCount: zod.number().nullish(),
   runCount: zod.number(),
 });
 
@@ -116,6 +118,7 @@ export const GetSchedulerStatusResponse = zod.object({
 export const StartSchedulerBody = zod.object({
   intervalMinutes: zod.number().optional(),
   testUrl: zod.string().optional(),
+  autoClearDead: zod.boolean().optional(),
 });
 
 export const StartSchedulerResponse = zod.object({
@@ -125,8 +128,10 @@ export const StartSchedulerResponse = zod.object({
     intervalMs: zod.number(),
     intervalMinutes: zod.number(),
     testUrl: zod.string(),
+    autoClearDead: zod.boolean().optional(),
     lastRunAt: zod.string().nullish(),
     nextRunAt: zod.string().nullish(),
+    lastAutoClearedCount: zod.number().nullish(),
     runCount: zod.number(),
   }),
 });
@@ -141,8 +146,10 @@ export const StopSchedulerResponse = zod.object({
     intervalMs: zod.number(),
     intervalMinutes: zod.number(),
     testUrl: zod.string(),
+    autoClearDead: zod.boolean().optional(),
     lastRunAt: zod.string().nullish(),
     nextRunAt: zod.string().nullish(),
+    lastAutoClearedCount: zod.number().nullish(),
     runCount: zod.number(),
   }),
 });
@@ -157,8 +164,10 @@ export const RunSchedulerNowResponse = zod.object({
     intervalMs: zod.number(),
     intervalMinutes: zod.number(),
     testUrl: zod.string(),
+    autoClearDead: zod.boolean().optional(),
     lastRunAt: zod.string().nullish(),
     nextRunAt: zod.string().nullish(),
+    lastAutoClearedCount: zod.number().nullish(),
     runCount: zod.number(),
   }),
 });

@@ -42,7 +42,7 @@ export function loadProxyIntoMemory(entry: ProxyEntry): void {
 
 export function addProxy(
   rawUrl: string,
-  label?: string
+  label?: string,
 ): ProxyEntry | { error: string } {
   let parsed: URL;
   try {
@@ -174,10 +174,10 @@ export function markDead(id: string): void {
 
 export function pickProxy(
   strategy: "random" | "roundrobin" = "roundrobin",
-  excludeIds: Set<string> = new Set()
+  excludeIds: Set<string> = new Set(),
 ): ProxyEntry | null {
   const alive = Array.from(pool.proxies.values()).filter(
-    (p) => p.alive && !excludeIds.has(p.id)
+    (p) => p.alive && !excludeIds.has(p.id),
   );
   if (alive.length === 0) return null;
 

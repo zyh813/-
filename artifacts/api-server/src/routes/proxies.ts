@@ -140,10 +140,10 @@ router.get("/proxies/scheduler", (_req, res) => {
 });
 
 router.post("/proxies/scheduler/start", (req, res) => {
-  const body = req.body as { intervalMinutes?: number; testUrl?: string };
+  const body = req.body as { intervalMinutes?: number; testUrl?: string; autoClearDead?: boolean };
   const intervalMs = body.intervalMinutes ? body.intervalMinutes * 60 * 1000 : undefined;
-  startScheduler(intervalMs, body.testUrl);
-  req.log.info({ intervalMs, testUrl: body.testUrl }, "定时检测已启动");
+  startScheduler(intervalMs, body.testUrl, body.autoClearDead);
+  req.log.info({ intervalMs, testUrl: body.testUrl, autoClearDead: body.autoClearDead }, "定时检测已启动");
   res.json({ message: "定时检测已启动", status: getSchedulerStatus() });
 });
 

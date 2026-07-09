@@ -156,6 +156,8 @@ paths:
                   type: integer
                 testUrl:
                   type: string
+                autoClearDead:
+                  type: boolean
       responses:
         "200":
           description: Scheduler started
@@ -379,11 +381,16 @@ components:
           type: integer
         testUrl:
           type: string
+        autoClearDead:
+          type: boolean
         lastRunAt:
           type: string
           nullable: true
         nextRunAt:
           type: string
+          nullable: true
+        lastAutoClearedCount:
+          type: integer
           nullable: true
         runCount:
           type: integer

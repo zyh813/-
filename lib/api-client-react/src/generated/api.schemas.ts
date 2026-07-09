@@ -62,8 +62,10 @@ export interface SchedulerStatus {
   intervalMs: number;
   intervalMinutes: number;
   testUrl: string;
+  autoClearDead?: boolean;
   lastRunAt?: string | null;
   nextRunAt?: string | null;
+  lastAutoClearedCount?: number | null;
   runCount: number;
 }
 
@@ -97,6 +99,7 @@ export type CheckAllProxiesBody = {
 export type StartSchedulerBody = {
   intervalMinutes?: number;
   testUrl?: string;
+  autoClearDead?: boolean;
 };
 
 export type CheckProxyBody = {

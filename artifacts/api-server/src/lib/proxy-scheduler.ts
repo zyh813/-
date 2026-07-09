@@ -1,4 +1,4 @@
-import { listProxies, markAlive, markDead, poolStats } from "./proxy-pool";
+import { listProxies, markAlive, markDead, poolStats, removeDeadProxies } from "./proxy-pool";
 import { undiciFetch } from "./undici-fetch";
 import { logger } from "./logger";
 import { saveSchedulerConfigToDb } from "./proxy-db";
@@ -7,11 +7,13 @@ interface SchedulerState {
   enabled: boolean;
   intervalMs: number;
   testUrl: string;
+  autoClearDead: boolean;
   timer: ReturnType<typeof setInterval> | null;
   lastRunAt: string | null;
   lastRunStats: { total: number; alive: number; dead: number } | null;
   nextRunAt: string | null;
   runCount: number;
+  lastAutoClearedCount: number | null;
 }
 
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
@@ -21,11 +23,13 @@ const state: SchedulerState = {
   enabled: false,
   intervalMs: DEFAULT_INTERVAL_MS,
   testUrl: DEFAULT_TEST_URL,
+  autoClearDead: false,
   timer: null,
   lastRunAt: null,
   lastRunStats: null,
   nextRunAt: null,
   runCount: 0,
+  lastAutoClearedCount: null,
 };
 
 async function runHealthCheck(): Promise<void> {
@@ -56,6 +60,14 @@ async function runHealthCheck(): Promise<void> {
   state.lastRunStats = poolStats();
   state.runCount++;
 
+  if (state.autoClearDead) {
+    const { removed } = removeDeadProxies();
+    state.lastAutoClearedCount = removed;
+    if (removed > 0) {
+      logger.info({ removed }, "proxy-scheduler: 自动清除失效代理");
+    }
+  }
+
   if (state.enabled) {
     state.nextRunAt = new Date(Date.now() + state.intervalMs).toISOString();
   }
@@ -63,9 +75,10 @@ async function runHealthCheck(): Promise<void> {
   logger.info(state.lastRunStats, "proxy-scheduler: 检测完成");
 }
 
-export function startScheduler(intervalMs?: number, testUrl?: string): void {
+export function startScheduler(intervalMs?: number, testUrl?: string, autoClearDead?: boolean): void {
   if (intervalMs && intervalMs > 0) state.intervalMs = intervalMs;
   if (testUrl) state.testUrl = testUrl;
+  if (autoClearDead !== undefined) state.autoClearDead = autoClearDead;
 
   if (state.timer) {
     clearInterval(state.timer);
@@ -81,10 +94,11 @@ export function startScheduler(intervalMs?: number, testUrl?: string): void {
     enabled: true,
     intervalMs: state.intervalMs,
     testUrl: state.testUrl,
+    autoClearDead: state.autoClearDead,
   }).catch(() => {});
 
   logger.info(
-    { intervalMs: state.intervalMs, testUrl: state.testUrl },
+    { intervalMs: state.intervalMs, testUrl: state.testUrl, autoClearDead: state.autoClearDead },
     "proxy-scheduler: 已启动"
   );
 }
@@ -101,6 +115,7 @@ export function stopScheduler(): void {
     enabled: false,
     intervalMs: state.intervalMs,
     testUrl: state.testUrl,
+    autoClearDead: state.autoClearDead,
   }).catch(() => {});
 
   logger.info("proxy-scheduler: 已停止");
@@ -116,9 +131,11 @@ export function getSchedulerStatus() {
     intervalMs: state.intervalMs,
     intervalMinutes: Math.round(state.intervalMs / 60000),
     testUrl: state.testUrl,
+    autoClearDead: state.autoClearDead,
     lastRunAt: state.lastRunAt,
     lastRunStats: state.lastRunStats,
     nextRunAt: state.nextRunAt,
     runCount: state.runCount,
+    lastAutoClearedCount: state.lastAutoClearedCount,
   };
 }

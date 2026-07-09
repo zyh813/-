@@ -27,10 +27,10 @@ async function bootstrap() {
 
   const savedConfig = await loadSchedulerConfigFromDb();
   if (savedConfig && savedConfig.enabled) {
-    startScheduler(savedConfig.intervalMs, savedConfig.testUrl);
-    logger.info({ intervalMs: savedConfig.intervalMs }, "从数据库恢复调度器配置");
+    startScheduler(savedConfig.intervalMs, savedConfig.testUrl, savedConfig.autoClearDead);
+    logger.info({ intervalMs: savedConfig.intervalMs, autoClearDead: savedConfig.autoClearDead }, "从数据库恢复调度器配置");
   } else {
-    startScheduler(5 * 60 * 1000, "https://httpbin.org/ip");
+    startScheduler(5 * 60 * 1000, "https://httpbin.org/ip", false);
   }
 
   app.listen(port, (err) => {

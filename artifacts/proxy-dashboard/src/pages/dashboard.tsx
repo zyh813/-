@@ -404,6 +404,7 @@ export default function Dashboard() {
   );
   const [intervalMinutes, setIntervalMinutes] = useState("5");
   const [testUrl, setTestUrl] = useState("https://www.google.com");
+  const [autoClearDead, setAutoClearDead] = useState(false);
 
   const handleSetPreferred = (id: string | null) => {
     setPreferredProxyId(id);
@@ -422,6 +423,13 @@ export default function Dashboard() {
 
   const { data: proxiesData, isLoading: proxiesLoading, refetch: refetchProxies } = useListProxies();
   const { data: schedulerData, refetch: refetchScheduler } = useGetSchedulerStatus();
+
+  // 从服务端同步 autoClearDead 状态（仅首次加载时）
+  const [autoClearDeadSynced, setAutoClearDeadSynced] = useState(false);
+  if (schedulerData && !autoClearDeadSynced) {
+    setAutoClearDead(schedulerData.autoClearDead ?? false);
+    setAutoClearDeadSynced(true);
+  }
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListProxiesQueryKey() });
@@ -1137,6 +1145,18 @@ export default function Dashboard() {
                         </span>
                       </div>
                     )}
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">自动清除失效</span>
+                      <Badge variant={scheduler.autoClearDead ? "default" : "secondary"} className="text-xs">
+                        {scheduler.autoClearDead ? "已开启" : "已关闭"}
+                      </Badge>
+                    </div>
+                    {scheduler.autoClearDead && scheduler.lastAutoClearedCount != null && (
+                      <div className="flex items-center justify-between">
+                        <span className="text-muted-foreground">上次清除数量</span>
+                        <span className="font-medium">{scheduler.lastAutoClearedCount} 个</span>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">加载中…</p>
@@ -1155,13 +1175,30 @@ export default function Dashboard() {
               />
             </div>
 
+            <div
+              className="flex items-center justify-between rounded-lg border px-3 py-2.5 cursor-pointer select-none"
+              onClick={() => setAutoClearDead((v) => !v)}
+            >
+              <div>
+                <p className="text-sm font-medium">检测后自动清除失效代理</p>
+                <p className="text-xs text-muted-foreground mt-0.5">每次定时检测结束后自动移除死亡节点</p>
+              </div>
+              <div
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${autoClearDead ? "bg-primary" : "bg-muted-foreground/30"}`}
+              >
+                <span
+                  className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${autoClearDead ? "translate-x-4" : "translate-x-0.5"}`}
+                />
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-2">
               <Button
                 size="sm"
                 className="h-9 col-span-1"
                 onClick={() =>
                   startSchedulerMutation.mutate({
-                    data: { intervalMinutes: Number(intervalMinutes), testUrl },
+                    data: { intervalMinutes: Number(intervalMinutes), testUrl, autoClearDead },
                   })
                 }
                 disabled={startSchedulerMutation.isPending}
