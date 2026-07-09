@@ -10,6 +10,7 @@ export interface ProxyEntry {
   url: string;
   protocol: "http" | "https" | "socks5";
   label?: string;
+  group?: string;
   addedAt: string;
   lastUsedAt?: string;
   lastCheckedAt?: string;
@@ -43,6 +44,7 @@ export function loadProxyIntoMemory(entry: ProxyEntry): void {
 export function addProxy(
   rawUrl: string,
   label?: string,
+  group?: string,
 ): ProxyEntry | { error: string } {
   let parsed: URL;
   try {
@@ -68,6 +70,7 @@ export function addProxy(
     url: rawUrl,
     protocol,
     label,
+    group,
     addedAt: new Date().toISOString(),
     successCount: 0,
     failureCount: 0,

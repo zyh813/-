@@ -26,11 +26,14 @@ import type {
   ClearDeadProxies200,
   ErrorResponse,
   HealthStatus,
+  ListTraffic200,
+  ListTrafficParams,
   MessageResponse,
   ProxyListResponse,
   SchedulerActionResponse,
   SchedulerStatus,
   StartSchedulerBody,
+  TrafficEntry,
 } from "./api.schemas";
 
 import { customFetch } from "../custom-fetch";
@@ -848,6 +851,268 @@ export const useRunSchedulerNow = <
 > => {
   return useMutation(getRunSchedulerNowMutationOptions(options));
 };
+
+/**
+ * @summary List captured traffic entries
+ */
+export const getListTrafficUrl = (params?: ListTrafficParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? "null" : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/api/traffic?${stringifiedParams}`
+    : `/api/traffic`;
+};
+
+export const listTraffic = async (
+  params?: ListTrafficParams,
+  options?: RequestInit,
+): Promise<ListTraffic200> => {
+  return customFetch<ListTraffic200>(getListTrafficUrl(params), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getListTrafficQueryKey = (params?: ListTrafficParams) => {
+  return [`/api/traffic`, ...(params ? [params] : [])] as const;
+};
+
+export const getListTrafficQueryOptions = <
+  TData = Awaited<ReturnType<typeof listTraffic>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListTrafficParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTraffic>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getListTrafficQueryKey(params);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof listTraffic>>> = ({
+    signal,
+  }) => listTraffic(params, { signal, ...requestOptions });
+
+  return { queryKey, queryFn, ...queryOptions } as UseQueryOptions<
+    Awaited<ReturnType<typeof listTraffic>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type ListTrafficQueryResult = NonNullable<
+  Awaited<ReturnType<typeof listTraffic>>
+>;
+export type ListTrafficQueryError = ErrorType<unknown>;
+
+/**
+ * @summary List captured traffic entries
+ */
+
+export function useListTraffic<
+  TData = Awaited<ReturnType<typeof listTraffic>>,
+  TError = ErrorType<unknown>,
+>(
+  params?: ListTrafficParams,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof listTraffic>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getListTrafficQueryOptions(params, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+/**
+ * @summary Clear all traffic entries
+ */
+export const getClearTrafficUrl = () => {
+  return `/api/traffic`;
+};
+
+export const clearTraffic = async (
+  options?: RequestInit,
+): Promise<MessageResponse> => {
+  return customFetch<MessageResponse>(getClearTrafficUrl(), {
+    ...options,
+    method: "DELETE",
+  });
+};
+
+export const getClearTrafficMutationOptions = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearTraffic>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof clearTraffic>>,
+  TError,
+  void,
+  TContext
+> => {
+  const mutationKey = ["clearTraffic"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof clearTraffic>>,
+    void
+  > = () => {
+    return clearTraffic(requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type ClearTrafficMutationResult = NonNullable<
+  Awaited<ReturnType<typeof clearTraffic>>
+>;
+
+export type ClearTrafficMutationError = ErrorType<unknown>;
+
+/**
+ * @summary Clear all traffic entries
+ */
+export const useClearTraffic = <
+  TError = ErrorType<unknown>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof clearTraffic>>,
+    TError,
+    void,
+    TContext
+  >;
+  request?: SecondParameter<typeof customFetch>;
+}): UseMutationResult<
+  Awaited<ReturnType<typeof clearTraffic>>,
+  TError,
+  void,
+  TContext
+> => {
+  return useMutation(getClearTrafficMutationOptions(options));
+};
+
+/**
+ * @summary Get a single traffic entry by ID
+ */
+export const getGetTrafficEntryUrl = (id: string) => {
+  return `/api/traffic/${id}`;
+};
+
+export const getTrafficEntry = async (
+  id: string,
+  options?: RequestInit,
+): Promise<TrafficEntry> => {
+  return customFetch<TrafficEntry>(getGetTrafficEntryUrl(id), {
+    ...options,
+    method: "GET",
+  });
+};
+
+export const getGetTrafficEntryQueryKey = (id: string) => {
+  return [`/api/traffic/${id}`] as const;
+};
+
+export const getGetTrafficEntryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getTrafficEntry>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTrafficEntry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey = queryOptions?.queryKey ?? getGetTrafficEntryQueryKey(id);
+
+  const queryFn: QueryFunction<Awaited<ReturnType<typeof getTrafficEntry>>> = ({
+    signal,
+  }) => getTrafficEntry(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getTrafficEntry>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetTrafficEntryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getTrafficEntry>>
+>;
+export type GetTrafficEntryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get a single traffic entry by ID
+ */
+
+export function useGetTrafficEntry<
+  TData = Awaited<ReturnType<typeof getTrafficEntry>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getTrafficEntry>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetTrafficEntryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Delete a proxy by ID

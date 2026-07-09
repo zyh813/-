@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import * as cheerio from "cheerio";
 import { humanFetch } from "../lib/human-fetch";
+import { recordTraffic } from "../lib/traffic-store";
 
 const router: IRouter = Router();
 
@@ -61,11 +62,29 @@ router.get("/fetch-page", async (req, res) => {
     return;
   }
 
+  const start = Date.now();
   try {
     const result = await humanFetch(targetUrl, { referer, cookies, useProxy, proxyStrategy, preferredProxyId, fallbackToDirect, maxProxyRetries });
     const parsedContent = parseHtml(result.body, result.finalUrl);
+    const durationMs = Date.now() - start;
 
     req.log.info({ url: targetUrl, statusCode: result.statusCode, proxy: result.proxyUsed ?? "直连" }, "fetch-page 成功");
+
+    recordTraffic({
+      source: "fetch-page",
+      method: "GET",
+      targetUrl,
+      finalUrl: result.finalUrl,
+      statusCode: result.statusCode,
+      contentType: result.contentType,
+      durationMs,
+      responseSize: result.body.length,
+      proxyUsed: result.proxyUsed ?? null,
+      fallbackToDirect: result.fallbackToDirect ?? false,
+      error: null,
+      requestHeaders: { "User-Agent": "humanFetch" },
+      responseBodyPreview: result.body.slice(0, 2000),
+    });
 
     res.json({
       url: targetUrl,
@@ -82,6 +101,21 @@ router.get("/fetch-page", async (req, res) => {
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "未知错误";
     req.log.error({ url: targetUrl, err }, "fetch-page 失败");
+    recordTraffic({
+      source: "fetch-page",
+      method: "GET",
+      targetUrl,
+      finalUrl: targetUrl,
+      statusCode: null,
+      contentType: null,
+      durationMs: Date.now() - start,
+      responseSize: 0,
+      proxyUsed: null,
+      fallbackToDirect: false,
+      error: message,
+      requestHeaders: { "User-Agent": "humanFetch" },
+      responseBodyPreview: null,
+    });
     res.status(500).json({ error: `请求失败: ${message}` });
   }
 });

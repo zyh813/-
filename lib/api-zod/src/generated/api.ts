@@ -29,6 +29,7 @@ export const ListProxiesResponse = zod.object({
       url: zod.string(),
       protocol: zod.string(),
       label: zod.string().nullish(),
+      group: zod.string().nullish(),
       addedAt: zod.string(),
       lastUsedAt: zod.string().nullish(),
       lastCheckedAt: zod.string().nullish(),
@@ -47,6 +48,7 @@ export const ListProxiesResponse = zod.object({
 export const AddProxiesBody = zod.object({
   url: zod.string().optional(),
   label: zod.string().optional(),
+  group: zod.string().optional(),
   urls: zod
     .array(
       zod.object({
@@ -170,6 +172,75 @@ export const RunSchedulerNowResponse = zod.object({
     lastAutoClearedCount: zod.number().nullish(),
     runCount: zod.number(),
   }),
+});
+
+/**
+ * @summary List captured traffic entries
+ */
+export const ListTrafficQueryParams = zod.object({
+  url: zod.coerce.string().optional(),
+  status: zod.coerce.string().optional(),
+  source: zod.coerce.string().optional(),
+  limit: zod.coerce.number().optional(),
+  offset: zod.coerce.number().optional(),
+});
+
+export const ListTrafficResponse = zod.object({
+  total: zod.number(),
+  entries: zod.array(
+    zod.object({
+      id: zod.string(),
+      timestamp: zod.string(),
+      source: zod.string(),
+      method: zod.string(),
+      targetUrl: zod.string(),
+      finalUrl: zod.string(),
+      statusCode: zod.number().nullish(),
+      contentType: zod.string().nullish(),
+      durationMs: zod.number(),
+      responseSize: zod.number(),
+      proxyUsed: zod.string().nullish(),
+      fallbackToDirect: zod.boolean(),
+      error: zod.string().nullish(),
+      responseBodyPreview: zod.string().nullish(),
+    }),
+  ),
+  stats: zod.object({
+    total: zod.number(),
+    errors: zod.number(),
+    avgDurationMs: zod.number(),
+  }),
+});
+
+/**
+ * @summary Clear all traffic entries
+ */
+export const ClearTrafficResponse = zod.object({
+  message: zod.string(),
+});
+
+/**
+ * @summary Get a single traffic entry by ID
+ */
+export const GetTrafficEntryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetTrafficEntryResponse = zod.object({
+  id: zod.string(),
+  timestamp: zod.string(),
+  source: zod.string(),
+  method: zod.string(),
+  targetUrl: zod.string(),
+  finalUrl: zod.string(),
+  statusCode: zod.number().nullish(),
+  contentType: zod.string().nullish(),
+  durationMs: zod.number(),
+  responseSize: zod.number(),
+  proxyUsed: zod.string().nullish(),
+  fallbackToDirect: zod.boolean(),
+  error: zod.string().nullish(),
+  responseBodyPreview: zod.string().nullish(),
 });
 
 /**

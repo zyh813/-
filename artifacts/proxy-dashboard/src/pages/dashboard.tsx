@@ -12,6 +12,9 @@ import {
   useStartScheduler,
   useStopScheduler,
   useRunSchedulerNow,
+  useListTraffic,
+  useClearTraffic,
+  getListTrafficQueryKey,
   getListProxiesQueryKey,
   getGetSchedulerStatusQueryKey,
 } from "@workspace/api-client-react";
@@ -57,6 +60,9 @@ import {
   Upload,
   ArrowUpDown,
   Star,
+  Tag,
+  Radio,
+  Filter,
 } from "lucide-react";
 
 function StatCard({
@@ -91,6 +97,7 @@ function ProxyRow({ proxy, onDelete, onCheck, isPreferred, onSetPreferred }: {
     url: string;
     protocol: string;
     label?: string | null;
+    group?: string | null;
     alive: boolean;
     latencyMs?: number | null;
     successCount: number;
@@ -127,9 +134,16 @@ function ProxyRow({ proxy, onDelete, onCheck, isPreferred, onSetPreferred }: {
               <span className="text-xs text-yellow-600 font-medium flex-shrink-0">首选</span>
             )}
           </div>
-          {proxy.label && (
-            <p className="text-xs text-muted-foreground truncate">{proxy.label}</p>
-          )}
+          <div className="flex items-center gap-1 flex-wrap">
+            {proxy.group && (
+              <span className="inline-flex items-center gap-0.5 text-xs bg-blue-50 text-blue-700 border border-blue-200 rounded px-1.5 py-0 leading-5">
+                <Tag className="w-2.5 h-2.5" />{proxy.group}
+              </span>
+            )}
+            {proxy.label && (
+              <span className="text-xs text-muted-foreground truncate">{proxy.label}</span>
+            )}
+          </div>
         </div>
         <div className="flex items-center gap-2 flex-shrink-0">
           <Badge variant={proxy.alive ? "default" : "destructive"} className="text-xs">
@@ -405,6 +419,13 @@ export default function Dashboard() {
   const [intervalMinutes, setIntervalMinutes] = useState("5");
   const [testUrl, setTestUrl] = useState("https://www.google.com");
   const [autoClearDead, setAutoClearDead] = useState(false);
+  const [singleGroup, setSingleGroup] = useState("");
+  const [batchGroup, setBatchGroup] = useState("");
+  const [groupFilter, setGroupFilter] = useState<string | null>(null);
+  const [trafficUrlFilter, setTrafficUrlFilter] = useState("");
+  const [trafficStatusFilter, setTrafficStatusFilter] = useState("");
+  const [selectedTrafficId, setSelectedTrafficId] = useState<string | null>(null);
+  const [trafficPage, setTrafficPage] = useState(0);
 
   const handleSetPreferred = (id: string | null) => {
     setPreferredProxyId(id);
@@ -533,14 +554,14 @@ export default function Dashboard() {
 
   const handleAddSingle = () => {
     if (!singleUrl.trim()) return;
-    addProxiesMutation.mutate({ data: { url: singleUrl.trim(), label: singleLabel.trim() || undefined } });
+    addProxiesMutation.mutate({ data: { url: singleUrl.trim(), label: singleLabel.trim() || undefined, group: singleGroup.trim() || undefined } });
   };
 
   const handleAddBatch = () => {
     const lines = batchText.trim().split("\n").filter(Boolean);
     const urls = lines.map((line) => {
       const parts = line.split(/\s+/);
-      return { url: parts[0], label: parts[1] || undefined };
+      return { url: parts[0], label: parts[1] || undefined, group: batchGroup.trim() || undefined };
     });
     if (urls.length === 0) return;
     addProxiesMutation.mutate({ data: { urls } });
@@ -601,19 +622,34 @@ export default function Dashboard() {
     }
   };
 
+  const trafficParams = { url: trafficUrlFilter || undefined, status: trafficStatusFilter || undefined, limit: 100, offset: trafficPage * 100 };
+  const { data: trafficData, refetch: refetchTraffic } = useListTraffic(
+    trafficParams,
+    { query: { refetchInterval: 3000, queryKey: getListTrafficQueryKey(trafficParams) } }
+  );
+
+  const clearTrafficMutation = useClearTraffic({
+    mutation: {
+      onSuccess: () => { toast({ title: "流量记录已清空" }); refetchTraffic(); setSelectedTrafficId(null); },
+    },
+  });
+
   const proxies = proxiesData?.proxies ?? [];
   const stats = proxiesData?.stats;
   const scheduler = schedulerData;
 
+  const allGroups = Array.from(new Set(proxies.map((p) => p.group).filter(Boolean) as string[]));
+  const filteredProxies = groupFilter ? proxies.filter((p) => p.group === groupFilter) : proxies;
+
   const aliveRaw = proxies.filter((p) => p.alive);
   const aliveProxies = (() => {
     let list = sortByLatency
-      ? [...aliveRaw].sort((a, b) => {
+      ? [...filteredProxies.filter(p => p.alive)].sort((a, b) => {
           const la = a.latencyMs ?? Infinity;
           const lb = b.latencyMs ?? Infinity;
           return la - lb;
         })
-      : [...aliveRaw];
+      : [...filteredProxies.filter(p => p.alive)];
     // 首选代理始终置顶
     if (preferredProxyId) {
       const idx = list.findIndex((p) => p.id === preferredProxyId);
@@ -624,7 +660,7 @@ export default function Dashboard() {
     }
     return list;
   })();
-  const deadProxies = proxies.filter((p) => !p.alive);
+  const deadProxies = filteredProxies.filter((p) => !p.alive);
 
   const preferredProxy = preferredProxyId ? proxies.find((p) => p.id === preferredProxyId) : null;
 
@@ -683,11 +719,12 @@ export default function Dashboard() {
         </div>
 
         <Tabs defaultValue="proxies">
-          <TabsList className="w-full mb-4 grid grid-cols-4">
+          <TabsList className="w-full mb-4 grid grid-cols-5">
             <TabsTrigger value="proxies" className="text-xs">代理池</TabsTrigger>
             <TabsTrigger value="add" className="text-xs">添加</TabsTrigger>
-            <TabsTrigger value="fetch" className="text-xs">抓取测试</TabsTrigger>
-            <TabsTrigger value="scheduler" className="text-xs">定时任务</TabsTrigger>
+            <TabsTrigger value="fetch" className="text-xs">抓取</TabsTrigger>
+            <TabsTrigger value="traffic" className="text-xs">抓包</TabsTrigger>
+            <TabsTrigger value="scheduler" className="text-xs">定时</TabsTrigger>
           </TabsList>
 
           <TabsContent value="proxies" className="space-y-3">
@@ -810,6 +847,27 @@ export default function Dashboard() {
               </div>
             )}
 
+            {allGroups.length > 0 && (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <Filter className="w-3.5 h-3.5 text-muted-foreground flex-shrink-0" />
+                <button
+                  onClick={() => setGroupFilter(null)}
+                  className={`text-xs px-2 py-0.5 rounded-full border transition-colors ${groupFilter === null ? "bg-primary text-primary-foreground border-primary" : "border-border hover:bg-muted"}`}
+                >
+                  全部
+                </button>
+                {allGroups.map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => setGroupFilter(groupFilter === g ? null : g)}
+                    className={`text-xs px-2 py-0.5 rounded-full border transition-colors flex items-center gap-0.5 ${groupFilter === g ? "bg-blue-600 text-white border-blue-600" : "border-border hover:bg-muted"}`}
+                  >
+                    <Tag className="w-2.5 h-2.5" />{g}
+                  </button>
+                ))}
+              </div>
+            )}
+
             {proxiesLoading ? (
               <div className="text-center py-10 text-muted-foreground text-sm">加载中…</div>
             ) : proxies.length === 0 ? (
@@ -900,6 +958,12 @@ export default function Dashboard() {
                   placeholder="备注（可选）"
                   className="h-9 text-sm"
                 />
+                <Input
+                  value={singleGroup}
+                  onChange={(e) => setSingleGroup(e.target.value)}
+                  placeholder="分组（可选，如：机场A、国内）"
+                  className="h-9 text-sm"
+                />
                 <Button
                   className="w-full h-9"
                   onClick={handleAddSingle}
@@ -952,6 +1016,12 @@ export default function Dashboard() {
                     </button>
                   )}
                 </div>
+                <Input
+                  value={batchGroup}
+                  onChange={(e) => setBatchGroup(e.target.value)}
+                  placeholder="批量分组（可选，统一设置分组）"
+                  className="h-9 text-sm"
+                />
                 <Button
                   className="w-full h-9"
                   onClick={handleAddBatch}
@@ -1100,6 +1170,194 @@ export default function Dashboard() {
                     </button>
                   ))}
                 </div>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="traffic" className="space-y-3">
+            {/* 顶部统计栏 */}
+            <div className="flex items-center gap-2">
+              <div className="flex-1 flex items-center gap-3 text-xs text-muted-foreground">
+                <span className="flex items-center gap-1"><Radio className="w-3.5 h-3.5 text-blue-500" />共 {trafficData?.total ?? 0} 条</span>
+                {(trafficData?.stats?.errors ?? 0) > 0 && (
+                  <span className="text-red-500">错误 {trafficData?.stats?.errors}</span>
+                )}
+                {(trafficData?.stats?.avgDurationMs ?? 0) > 0 && (
+                  <span>均 {Math.round(trafficData!.stats!.avgDurationMs!)}ms</span>
+                )}
+              </div>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2"
+                onClick={() => refetchTraffic()}
+              >
+                <RefreshCw className="w-3 h-3 mr-1" />刷新
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 text-xs px-2 text-muted-foreground"
+                onClick={() => {
+                  const entries = trafficData?.entries ?? [];
+                  if (entries.length === 0) return;
+                  const har = {
+                    log: {
+                      version: "1.2",
+                      creator: { name: "ProxyDashboard", version: "1.0" },
+                      entries: entries.map((e) => ({
+                        startedDateTime: e.timestamp,
+                        time: e.durationMs ?? 0,
+                        request: { method: e.method ?? "GET", url: e.targetUrl, headers: [], queryString: [], cookies: [], headersSize: -1, bodySize: -1 },
+                        response: { status: e.statusCode ?? 0, statusText: "", headers: [], cookies: [], content: { size: e.responseSize ?? -1, mimeType: e.contentType ?? "text/html" }, redirectURL: "", headersSize: -1, bodySize: e.responseSize ?? -1 },
+                        cache: {},
+                        timings: { send: 0, wait: e.durationMs ?? 0, receive: 0 },
+                      })),
+                    },
+                  };
+                  const blob = new Blob([JSON.stringify(har, null, 2)], { type: "application/json" });
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `traffic-${Date.now()}.har`;
+                  a.click();
+                }}
+              >
+                <FileDown className="w-3 h-3 mr-1" />HAR
+              </Button>
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-7 text-xs px-2 text-destructive">
+                    <Trash2 className="w-3 h-3 mr-1" />清空
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>确认清空流量记录？</AlertDialogTitle>
+                    <AlertDialogDescription>此操作不可撤销，将删除所有抓包记录。</AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>取消</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => clearTrafficMutation.mutate()}>确认清空</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+
+            {/* 过滤栏 */}
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  value={trafficUrlFilter}
+                  onChange={(e) => { setTrafficUrlFilter(e.target.value); setTrafficPage(0); }}
+                  placeholder="过滤 URL…"
+                  className="h-8 text-xs pl-7"
+                />
+              </div>
+              <select
+                value={trafficStatusFilter}
+                onChange={(e) => { setTrafficStatusFilter(e.target.value); setTrafficPage(0); }}
+                className="h-8 text-xs border rounded-md px-2 bg-background"
+              >
+                <option value="">全部</option>
+                <option value="2xx">2xx</option>
+                <option value="3xx">3xx</option>
+                <option value="4xx">4xx</option>
+                <option value="5xx">5xx</option>
+                <option value="error">错误</option>
+              </select>
+            </div>
+
+            {/* 流量列表 */}
+            {(trafficData?.entries ?? []).length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <Radio className="w-10 h-10 mx-auto mb-2 opacity-20" />
+                <p className="text-sm">暂无流量记录</p>
+                <p className="text-xs mt-1">在「抓取」标签发起请求后将自动记录</p>
+              </div>
+            ) : (
+              <div className="space-y-1">
+                {(trafficData?.entries ?? []).map((entry) => {
+                  const isSelected = selectedTrafficId === entry.id;
+                  const statusCode = entry.statusCode ?? 0;
+                  const isError = !!entry.error && !entry.statusCode;
+                  const statusColor =
+                    isError ? "bg-red-100 text-red-700 border-red-200" :
+                    statusCode >= 500 ? "bg-orange-100 text-orange-700 border-orange-200" :
+                    statusCode >= 400 ? "bg-yellow-100 text-yellow-700 border-yellow-200" :
+                    statusCode >= 300 ? "bg-blue-100 text-blue-700 border-blue-200" :
+                    "bg-green-100 text-green-700 border-green-200";
+                  const methodColor =
+                    (entry.method ?? "GET") === "POST" ? "bg-purple-500" :
+                    (entry.method ?? "GET") === "GET" ? "bg-blue-500" : "bg-gray-500";
+
+                  return (
+                    <div key={entry.id}>
+                      <button
+                        className={`w-full text-left rounded-lg border px-3 py-2 transition-colors text-xs ${isSelected ? "border-primary bg-primary/5" : "hover:bg-muted/50"}`}
+                        onClick={() => setSelectedTrafficId(isSelected ? null : entry.id)}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className={`flex-shrink-0 text-white text-[10px] font-bold px-1.5 py-0.5 rounded ${methodColor}`}>
+                            {entry.method ?? "GET"}
+                          </span>
+                          <span className="flex-1 truncate font-mono">{entry.targetUrl}</span>
+                          <span className={`flex-shrink-0 text-[10px] font-semibold border px-1.5 py-0.5 rounded ${statusColor}`}>
+                            {isError ? "ERR" : statusCode}
+                          </span>
+                          {entry.durationMs != null && (
+                            <span className="flex-shrink-0 text-muted-foreground">{entry.durationMs}ms</span>
+                          )}
+                          {isSelected ? <ChevronUp className="w-3 h-3 flex-shrink-0" /> : <ChevronDown className="w-3 h-3 flex-shrink-0" />}
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-muted-foreground">
+                          <span>{new Date(entry.timestamp ?? "").toLocaleTimeString()}</span>
+                          {entry.proxyUsed && <span className="flex items-center gap-0.5"><Wifi className="w-2.5 h-2.5" />{entry.proxyUsed}</span>}
+                          {entry.contentType && <span className="truncate">{entry.contentType.split(";")[0]}</span>}
+                        </div>
+                      </button>
+
+                      {isSelected && (
+                        <div className="border border-t-0 rounded-b-lg bg-muted/20 px-3 py-2 space-y-1.5 text-xs">
+                          <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+                            <div><span className="text-muted-foreground">来源：</span>{entry.source ?? "-"}</div>
+                            <div><span className="text-muted-foreground">代理：</span>{entry.proxyUsed ?? "直连"}</div>
+                            <div><span className="text-muted-foreground">状态：</span>{statusCode || "-"}</div>
+                            <div><span className="text-muted-foreground">耗时：</span>{entry.durationMs != null ? `${entry.durationMs}ms` : "-"}</div>
+                            <div><span className="text-muted-foreground">大小：</span>{entry.responseSize != null ? `${entry.responseSize}B` : "-"}</div>
+                            <div><span className="text-muted-foreground">类型：</span>{entry.contentType?.split(";")[0] ?? "-"}</div>
+                          </div>
+                          <div>
+                            <span className="text-muted-foreground">URL：</span>
+                            <span className="font-mono break-all">{entry.targetUrl}</span>
+                          </div>
+                          {entry.finalUrl && entry.finalUrl !== entry.targetUrl && (
+                            <div>
+                              <span className="text-muted-foreground">跳转至：</span>
+                              <span className="font-mono break-all text-blue-600">{entry.finalUrl}</span>
+                            </div>
+                          )}
+                          {entry.error && (
+                            <div className="text-red-600 font-mono break-all">{entry.error}</div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 分页 */}
+            {(trafficData?.total ?? 0) > 100 && (
+              <div className="flex items-center justify-between text-xs">
+                <Button variant="outline" size="sm" className="h-7" disabled={trafficPage === 0} onClick={() => setTrafficPage(p => p - 1)}>
+                  上一页
+                </Button>
+                <span className="text-muted-foreground">第 {trafficPage + 1} 页 / 共 {Math.ceil((trafficData?.total ?? 0) / 100)} 页</span>
+                <Button variant="outline" size="sm" className="h-7" disabled={(trafficPage + 1) * 100 >= (trafficData?.total ?? 0)} onClick={() => setTrafficPage(p => p + 1)}>
+                  下一页
+                </Button>
               </div>
             )}
           </TabsContent>

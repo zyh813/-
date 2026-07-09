@@ -7,6 +7,7 @@ export const proxiesTable = pgTable("proxies", {
   url: text("url").notNull().unique(),
   protocol: text("protocol").notNull(),
   label: text("label"),
+  group: text("group"),
   addedAt: timestamp("added_at", { withTimezone: true }).notNull().defaultNow(),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   lastCheckedAt: timestamp("last_checked_at", { withTimezone: true }),

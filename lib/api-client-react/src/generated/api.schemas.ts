@@ -17,11 +17,35 @@ export interface MessageResponse {
   message: string;
 }
 
+export interface TrafficEntry {
+  id: string;
+  timestamp: string;
+  source: string;
+  method: string;
+  targetUrl: string;
+  finalUrl: string;
+  statusCode?: number | null;
+  contentType?: string | null;
+  durationMs: number;
+  responseSize: number;
+  proxyUsed?: string | null;
+  fallbackToDirect: boolean;
+  error?: string | null;
+  responseBodyPreview?: string | null;
+}
+
+export interface TrafficStats {
+  total: number;
+  errors: number;
+  avgDurationMs: number;
+}
+
 export interface ProxyEntry {
   id: string;
   url: string;
   protocol: string;
   label?: string | null;
+  group?: string | null;
   addedAt: string;
   lastUsedAt?: string | null;
   lastCheckedAt?: string | null;
@@ -82,6 +106,7 @@ export type AddProxiesBodyUrlsItem = {
 export type AddProxiesBody = {
   url?: string;
   label?: string;
+  group?: string;
   urls?: AddProxiesBodyUrlsItem[];
 };
 
@@ -100,6 +125,20 @@ export type StartSchedulerBody = {
   intervalMinutes?: number;
   testUrl?: string;
   autoClearDead?: boolean;
+};
+
+export type ListTrafficParams = {
+  url?: string;
+  status?: string;
+  source?: string;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListTraffic200 = {
+  total: number;
+  entries: TrafficEntry[];
+  stats: TrafficStats;
 };
 
 export type CheckProxyBody = {

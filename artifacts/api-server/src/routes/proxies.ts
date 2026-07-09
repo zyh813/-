@@ -35,7 +35,11 @@ router.post("/proxies", (req, res) => {
         typeof item === "object" && item !== null
           ? ((item as { label?: string }).label ?? undefined)
           : undefined;
-      const result = addProxy(url, label);
+      const group =
+        typeof item === "object" && item !== null
+          ? ((item as { group?: string }).group ?? (body as { group?: string }).group ?? undefined)
+          : (body as { group?: string }).group ?? undefined;
+      const result = addProxy(url, label, group);
       results.push({ url, result });
     }
     req.log.info({ count: results.length }, "批量添加代理");
@@ -48,7 +52,11 @@ router.post("/proxies", (req, res) => {
     return;
   }
 
-  const result = addProxy(body.url, typeof body.label === "string" ? body.label : undefined);
+  const result = addProxy(
+    body.url,
+    typeof body.label === "string" ? body.label : undefined,
+    typeof (body as { group?: string }).group === "string" ? (body as { group?: string }).group : undefined,
+  );
   if ("error" in result) {
     res.status(400).json(result);
     return;
