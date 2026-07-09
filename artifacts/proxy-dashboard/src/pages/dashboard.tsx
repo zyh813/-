@@ -426,6 +426,7 @@ export default function Dashboard() {
   const [trafficStatusFilter, setTrafficStatusFilter] = useState("");
   const [selectedTrafficId, setSelectedTrafficId] = useState<string | null>(null);
   const [trafficPage, setTrafficPage] = useState(0);
+  const [activeTab, setActiveTab] = useState("proxies");
 
   const handleSetPreferred = (id: string | null) => {
     setPreferredProxyId(id);
@@ -567,8 +568,8 @@ export default function Dashboard() {
     addProxiesMutation.mutate({ data: { urls } });
   };
 
-  const handleFetch = async () => {
-    const url = fetchUrl.trim();
+  const handleFetch = async (overrideUrl?: string) => {
+    const url = (overrideUrl ?? fetchUrl).trim();
     if (!url) return;
     setFetchLoading(true);
     setFetchResult(null);
@@ -718,7 +719,7 @@ export default function Dashboard() {
           <StatCard title="失效" value={stats?.dead ?? 0} icon={WifiOff} color="bg-red-400" />
         </div>
 
-        <Tabs defaultValue="proxies">
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
           <TabsList className="w-full mb-4 grid grid-cols-5">
             <TabsTrigger value="proxies" className="text-xs">代理池</TabsTrigger>
             <TabsTrigger value="add" className="text-xs">添加</TabsTrigger>
@@ -1097,7 +1098,7 @@ export default function Dashboard() {
 
               <Button
                 className="w-full h-9"
-                onClick={handleFetch}
+                onClick={() => handleFetch()}
                 disabled={!fetchUrl.trim() || fetchLoading || (useProxy && aliveProxies.length === 0)}
               >
                 <Search className="w-4 h-4 mr-1" />
@@ -1340,6 +1341,19 @@ export default function Dashboard() {
                           {entry.error && (
                             <div className="text-red-600 font-mono break-all">{entry.error}</div>
                           )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-7 text-xs mt-1"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setFetchUrl(entry.targetUrl);
+                              setActiveTab("fetch");
+                              handleFetch(entry.targetUrl);
+                            }}
+                          >
+                            <RefreshCw className="w-3 h-3 mr-1" />重放请求
+                          </Button>
                         </div>
                       )}
                     </div>
