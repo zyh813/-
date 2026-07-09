@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { humanFetch, randomDelay } from "../lib/human-fetch";
 import { parseHtml } from "./fetch-page";
+import { recordTraffic } from "../lib/traffic-store";
 
 const router: IRouter = Router();
 
@@ -36,6 +37,7 @@ async function fetchWithDelay(
     await randomDelay(DELAY_MIN_MS, DELAY_MAX_MS);
   }
 
+  const start = Date.now();
   try {
     const result = await humanFetch(task.url, {
       referer: task.referer,
@@ -46,6 +48,21 @@ async function fetchWithDelay(
       maxProxyRetries: task.maxProxyRetries ?? 3,
     });
     const parsed = parseHtml(result.body, result.finalUrl);
+    recordTraffic({
+      source: "fetch-pages",
+      method: "GET",
+      targetUrl: task.url,
+      finalUrl: result.finalUrl,
+      statusCode: result.statusCode,
+      contentType: result.contentType,
+      durationMs: Date.now() - start,
+      responseSize: result.body.length,
+      proxyUsed: result.proxyUsed ?? null,
+      fallbackToDirect: result.fallbackToDirect ?? false,
+      error: null,
+      requestHeaders: { "User-Agent": "humanFetch" },
+      responseBodyPreview: result.body.slice(0, 2000),
+    });
     return {
       url: task.url,
       finalUrl: result.finalUrl,
@@ -54,9 +71,25 @@ async function fetchWithDelay(
       parsed,
     };
   } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "未知错误";
+    recordTraffic({
+      source: "fetch-pages",
+      method: "GET",
+      targetUrl: task.url,
+      finalUrl: task.url,
+      statusCode: null,
+      contentType: null,
+      durationMs: Date.now() - start,
+      responseSize: 0,
+      proxyUsed: null,
+      fallbackToDirect: false,
+      error: message,
+      requestHeaders: { "User-Agent": "humanFetch" },
+      responseBodyPreview: null,
+    });
     return {
       url: task.url,
-      error: err instanceof Error ? err.message : "未知错误",
+      error: message,
     };
   }
 }
