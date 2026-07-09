@@ -27,11 +27,30 @@ interface ProxyPool {
 }
 
 const MAX_CONSECUTIVE_FAILS = 3;
+const MAX_LATENCY_HISTORY = 50;
+
+export interface LatencyPoint {
+  timestamp: string;
+  latencyMs: number;
+}
 
 const pool: ProxyPool = {
   proxies: new Map(),
   roundRobinIndex: 0,
 };
+
+const latencyHistory: Map<string, LatencyPoint[]> = new Map();
+
+function pushLatencyHistory(id: string, latencyMs: number): void {
+  const list = latencyHistory.get(id) ?? [];
+  list.push({ timestamp: new Date().toISOString(), latencyMs });
+  if (list.length > MAX_LATENCY_HISTORY) list.shift();
+  latencyHistory.set(id, list);
+}
+
+export function getLatencyHistory(id: string): LatencyPoint[] {
+  return latencyHistory.get(id) ?? [];
+}
 
 function generateId(): string {
   return Math.random().toString(36).slice(2, 10);
@@ -85,7 +104,10 @@ export function addProxy(
 
 export function removeProxy(id: string): boolean {
   const deleted = pool.proxies.delete(id);
-  if (deleted) deleteProxyFromDb(id).catch(() => {});
+  if (deleted) {
+    deleteProxyFromDb(id).catch(() => {});
+    latencyHistory.delete(id);
+  }
   return deleted;
 }
 
@@ -100,6 +122,7 @@ export function getProxy(id: string): ProxyEntry | undefined {
 export function clearProxies(): void {
   pool.proxies.clear();
   pool.roundRobinIndex = 0;
+  latencyHistory.clear();
   deleteAllProxiesFromDb().catch(() => {});
 }
 
@@ -110,6 +133,7 @@ export function removeDeadProxies(): { removed: number; ids: string[] } {
       pool.proxies.delete(id);
       deadIds.push(id);
       deleteProxyFromDb(id).catch(() => {});
+      latencyHistory.delete(id);
     }
   }
   return { removed: deadIds.length, ids: deadIds };
@@ -123,6 +147,7 @@ export function recordSuccess(id: string, latencyMs: number): void {
   entry.alive = true;
   entry.latencyMs = latencyMs;
   entry.lastUsedAt = new Date().toISOString();
+  pushLatencyHistory(id, latencyMs);
   updateProxyStatsInDb(id, {
     successCount: entry.successCount,
     consecutiveFails: 0,
@@ -156,6 +181,7 @@ export function markAlive(id: string, latencyMs: number): void {
   entry.consecutiveFails = 0;
   entry.latencyMs = latencyMs;
   entry.lastCheckedAt = new Date().toISOString();
+  pushLatencyHistory(id, latencyMs);
   updateProxyStatsInDb(id, {
     alive: true,
     consecutiveFails: 0,

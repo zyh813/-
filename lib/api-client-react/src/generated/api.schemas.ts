@@ -13,6 +13,11 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface LatencyPoint {
+  timestamp: string;
+  latencyMs: number;
+}
+
 export interface MessageResponse {
   message: string;
 }
@@ -139,6 +144,11 @@ export type ListTraffic200 = {
   total: number;
   entries: TrafficEntry[];
   stats: TrafficStats;
+};
+
+export type GetProxyLatencyHistory200 = {
+  id?: string;
+  history?: LatencyPoint[];
 };
 
 export type CheckProxyBody = {

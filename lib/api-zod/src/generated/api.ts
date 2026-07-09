@@ -255,6 +255,25 @@ export const DeleteProxyResponse = zod.object({
 });
 
 /**
+ * @summary Get recent latency history for a proxy
+ */
+export const GetProxyLatencyHistoryParams = zod.object({
+  id: zod.coerce.string(),
+});
+
+export const GetProxyLatencyHistoryResponse = zod.object({
+  id: zod.string().optional(),
+  history: zod
+    .array(
+      zod.object({
+        timestamp: zod.string(),
+        latencyMs: zod.number(),
+      }),
+    )
+    .optional(),
+});
+
+/**
  * @summary Check health of a single proxy
  */
 export const CheckProxyParams = zod.object({

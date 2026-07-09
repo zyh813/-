@@ -10,6 +10,7 @@ import {
   markAlive,
   markDead,
   getProxy,
+  getLatencyHistory,
 } from "../lib/proxy-pool";
 import {
   startScheduler,
@@ -87,6 +88,16 @@ router.delete("/proxies/:id", (req, res) => {
   }
   req.log.info({ id }, "删除代理");
   res.json({ message: "已删除" });
+});
+
+router.get("/proxies/:id/latency-history", (req, res) => {
+  const { id } = req.params;
+  const proxy = getProxy(id);
+  if (!proxy) {
+    res.status(404).json({ error: "代理不存在" });
+    return;
+  }
+  res.json({ id, history: getLatencyHistory(id) });
 });
 
 router.post("/proxies/:id/check", async (req, res) => {

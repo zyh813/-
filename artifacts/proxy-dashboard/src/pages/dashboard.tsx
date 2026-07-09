@@ -1,6 +1,14 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+} from "recharts";
+import {
   useListProxies,
   useAddProxies,
   useDeleteProxy,
@@ -14,9 +22,11 @@ import {
   useRunSchedulerNow,
   useListTraffic,
   useClearTraffic,
+  useGetProxyLatencyHistory,
   getListTrafficQueryKey,
   getListProxiesQueryKey,
   getGetSchedulerStatusQueryKey,
+  getGetProxyLatencyHistoryQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -88,6 +98,43 @@ function StatCard({
         </div>
       </CardContent>
     </Card>
+  );
+}
+
+function LatencyChart({ proxyId, enabled }: { proxyId: string; enabled: boolean }) {
+  const { data, isLoading } = useGetProxyLatencyHistory(proxyId, {
+    query: { enabled, queryKey: getGetProxyLatencyHistoryQueryKey(proxyId) },
+  });
+
+  const points = data?.history ?? [];
+
+  if (isLoading) {
+    return <p className="text-xs text-muted-foreground py-2">加载延迟趋势中...</p>;
+  }
+
+  if (points.length < 2) {
+    return <p className="text-xs text-muted-foreground py-2">暂无足够的延迟历史数据（需要多次检测）</p>;
+  }
+
+  const chartData = points.map((p) => ({
+    time: new Date(p.timestamp).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", second: "2-digit" }),
+    latencyMs: p.latencyMs,
+  }));
+
+  return (
+    <div className="h-32 mt-1 mb-2 -ml-2">
+      <ResponsiveContainer width="100%" height="100%">
+        <LineChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
+          <XAxis dataKey="time" tick={{ fontSize: 9 }} interval="preserveStartEnd" minTickGap={20} />
+          <YAxis tick={{ fontSize: 9 }} width={32} unit="ms" />
+          <Tooltip
+            contentStyle={{ fontSize: 11, padding: "4px 8px" }}
+            formatter={(value: number) => [`${value}ms`, "延迟"]}
+          />
+          <Line type="monotone" dataKey="latencyMs" stroke="#3b82f6" strokeWidth={2} dot={{ r: 2 }} isAnimationActive={false} />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
   );
 }
 
@@ -184,6 +231,13 @@ function ProxyRow({ proxy, onDelete, onCheck, isPreferred, onSetPreferred }: {
                 <span className="font-medium">{new Date(proxy.lastCheckedAt).toLocaleTimeString()}</span>
               </div>
             )}
+          </div>
+          <div>
+            <p className="text-xs text-muted-foreground mb-1 flex items-center gap-1">
+              <Activity className="w-3 h-3" />
+              延迟趋势
+            </p>
+            <LatencyChart proxyId={proxy.id} enabled={expanded} />
           </div>
           <div className="flex gap-2">
             <Button

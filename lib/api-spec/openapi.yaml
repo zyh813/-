@@ -301,6 +301,38 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorResponse"
 
+  /proxies/{id}/latency-history:
+    get:
+      operationId: getProxyLatencyHistory
+      tags: [proxies]
+      summary: Get recent latency history for a proxy
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Latency history
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  history:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/LatencyPoint"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
   /proxies/{id}/check:
     post:
       operationId: checkProxy
@@ -362,6 +394,15 @@ components:
         error:
           type: string
       required: [error]
+
+    LatencyPoint:
+      type: object
+      properties:
+        timestamp:
+          type: string
+        latencyMs:
+          type: integer
+      required: [timestamp, latencyMs]
 
     MessageResponse:
       type: object

@@ -25,6 +25,7 @@ import type {
   CheckProxyBody,
   ClearDeadProxies200,
   ErrorResponse,
+  GetProxyLatencyHistory200,
   HealthStatus,
   ListTraffic200,
   ListTrafficParams,
@@ -1197,6 +1198,97 @@ export const useDeleteProxy = <
 > => {
   return useMutation(getDeleteProxyMutationOptions(options));
 };
+
+/**
+ * @summary Get recent latency history for a proxy
+ */
+export const getGetProxyLatencyHistoryUrl = (id: string) => {
+  return `/api/proxies/${id}/latency-history`;
+};
+
+export const getProxyLatencyHistory = async (
+  id: string,
+  options?: RequestInit,
+): Promise<GetProxyLatencyHistory200> => {
+  return customFetch<GetProxyLatencyHistory200>(
+    getGetProxyLatencyHistoryUrl(id),
+    {
+      ...options,
+      method: "GET",
+    },
+  );
+};
+
+export const getGetProxyLatencyHistoryQueryKey = (id: string) => {
+  return [`/api/proxies/${id}/latency-history`] as const;
+};
+
+export const getGetProxyLatencyHistoryQueryOptions = <
+  TData = Awaited<ReturnType<typeof getProxyLatencyHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProxyLatencyHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+) => {
+  const { query: queryOptions, request: requestOptions } = options ?? {};
+
+  const queryKey =
+    queryOptions?.queryKey ?? getGetProxyLatencyHistoryQueryKey(id);
+
+  const queryFn: QueryFunction<
+    Awaited<ReturnType<typeof getProxyLatencyHistory>>
+  > = ({ signal }) => getProxyLatencyHistory(id, { signal, ...requestOptions });
+
+  return {
+    queryKey,
+    queryFn,
+    enabled: !!id,
+    ...queryOptions,
+  } as UseQueryOptions<
+    Awaited<ReturnType<typeof getProxyLatencyHistory>>,
+    TError,
+    TData
+  > & { queryKey: QueryKey };
+};
+
+export type GetProxyLatencyHistoryQueryResult = NonNullable<
+  Awaited<ReturnType<typeof getProxyLatencyHistory>>
+>;
+export type GetProxyLatencyHistoryQueryError = ErrorType<ErrorResponse>;
+
+/**
+ * @summary Get recent latency history for a proxy
+ */
+
+export function useGetProxyLatencyHistory<
+  TData = Awaited<ReturnType<typeof getProxyLatencyHistory>>,
+  TError = ErrorType<ErrorResponse>,
+>(
+  id: string,
+  options?: {
+    query?: UseQueryOptions<
+      Awaited<ReturnType<typeof getProxyLatencyHistory>>,
+      TError,
+      TData
+    >;
+    request?: SecondParameter<typeof customFetch>;
+  },
+): UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+  const queryOptions = getGetProxyLatencyHistoryQueryOptions(id, options);
+
+  const query = useQuery(queryOptions) as UseQueryResult<TData, TError> & {
+    queryKey: QueryKey;
+  };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
 
 /**
  * @summary Check health of a single proxy
