@@ -783,11 +783,11 @@ export default function Dashboard() {
           </TabsList>
 
           <TabsContent value="proxies" className="space-y-3">
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button
                 variant="outline"
                 size="sm"
-                className="flex-1 h-9"
+                className="flex-1 min-w-[80px] h-9"
                 onClick={() => checkAllMutation.mutate({ data: { testUrl } })}
                 disabled={checkAllMutation.isPending || proxies.length === 0}
               >
@@ -797,7 +797,7 @@ export default function Dashboard() {
               <Button
                 variant={sortByLatency ? "default" : "outline"}
                 size="sm"
-                className="h-9"
+                className="h-9 min-w-[60px]"
                 disabled={aliveRaw.length === 0}
                 onClick={() => setSortByLatency((v) => !v)}
                 title={sortByLatency ? "取消延迟排序" : "按延迟从低到高排序"}
@@ -808,7 +808,7 @@ export default function Dashboard() {
               <Button
                 variant="outline"
                 size="sm"
-                className="h-9"
+                className="h-9 min-w-[60px]"
                 disabled={proxies.length === 0}
                 onClick={() => setShowExport((v) => !v)}
               >
@@ -820,7 +820,7 @@ export default function Dashboard() {
                   <Button
                     variant="outline"
                     size="sm"
-                    className="h-9 text-orange-500 hover:text-orange-600 border-orange-200 hover:border-orange-300"
+                    className="h-9 text-orange-500 hover:text-orange-600 border-orange-200 hover:border-orange-300 min-w-[70px]"
                     disabled={deadProxies.length === 0 || clearDeadMutation.isPending}
                   >
                     <Trash2 className="w-4 h-4 mr-1" />
@@ -842,7 +842,7 @@ export default function Dashboard() {
               </AlertDialog>
               <AlertDialog>
                 <AlertDialogTrigger asChild>
-                  <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive" disabled={proxies.length === 0}>
+                  <Button variant="outline" size="sm" className="h-9 text-destructive hover:text-destructive min-w-[60px]" disabled={proxies.length === 0}>
                     <Trash2 className="w-4 h-4 mr-1" />
                     清空
                   </Button>
