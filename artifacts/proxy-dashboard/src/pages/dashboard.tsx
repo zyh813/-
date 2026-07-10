@@ -471,7 +471,7 @@ export default function Dashboard() {
     () => localStorage.getItem("preferredProxyId")
   );
   const [intervalMinutes, setIntervalMinutes] = useState("5");
-  const [testUrl, setTestUrl] = useState("https://www.google.com");
+  const [testUrl, setTestUrl] = useState("http://ip-api.com/json");
   const [autoClearDead, setAutoClearDead] = useState(false);
   const [singleGroup, setSingleGroup] = useState("");
   const [batchGroup, setBatchGroup] = useState("");
