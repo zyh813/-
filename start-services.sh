@@ -108,6 +108,40 @@ echo "  API (8080): ${API_CODE}"
 echo "  Nginx (24039): ${NGINX_CODE}"
 
 echo ""
+echo "=== 代理恢复 ==="
+if [ -f /workspace/proxies-backup.txt ]; then
+    PROXY_COUNT=$(curl -s http://localhost:8080/api/proxies 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['stats']['total'])" 2>/dev/null || echo "0")
+    if [ "${PROXY_COUNT}" = "0" ]; then
+        echo "  代理池为空，从备份恢复..."
+        PROXIES_JSON=$(python3 -c "
+import sys
+lines = [l.strip() for l in open('/workspace/proxies-backup.txt') if l.strip()]
+urls = []
+for line in lines:
+    parts = line.split(' ', 1)
+    url = parts[0]
+    label = parts[1] if len(parts) > 1 else ''
+    urls.append({'url': url, 'label': label})
+import json
+print(json.dumps({'urls': urls}))
+")
+        curl -s -X POST http://localhost:8080/api/proxies \
+            -H "Content-Type: application/json" \
+            -d "${PROXIES_JSON}" > /dev/null 2>&1
+        NEW_COUNT=$(curl -s http://localhost:8080/api/proxies 2>/dev/null | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['stats']['total'])" 2>/dev/null || echo "0")
+        echo "  已恢复 ${NEW_COUNT} 个代理"
+        curl -s -X POST http://localhost:8080/api/proxies/check-all \
+            -H "Content-Type: application/json" \
+            -d '{"testUrl": "http://ip-api.com/json"}' > /dev/null 2>&1
+        echo "  已触发健康检测"
+    else
+        echo "  代理池已有 ${PROXY_COUNT} 个代理，跳过恢复"
+    fi
+else
+    echo "  未找到代理备份文件"
+fi
+
+echo ""
 echo "=== 启动完成 ==="
 echo "所有服务由 supervisor 托管，自动重启"
 echo "supervisord 是 PID 1，环境重启后自动恢复所有服务"
