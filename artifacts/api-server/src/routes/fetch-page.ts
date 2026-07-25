@@ -30,20 +30,36 @@ export function parseHtml(body: string, baseUrl: string) {
     if (text) headings.push({ level: el.tagName.toLowerCase(), text });
   });
 
-  $("script, style, noscript, nav, footer, header, [type='text/css'], [type='text/javascript']").remove();
-  // Remove elements whose text looks like embedded CSS/JS (e.g. Baidu injects style blocks as text nodes)
-  $("*").each((_i, el) => {
-    const text = $(el).clone().children().remove().end().text().trim();
-    if (/^\s*[\w\-]+\s*\{/.test(text) || /^\s*<style/i.test(text) || /^\s*<script/i.test(text)) {
-      $(el).empty();
-    }
+  // Remove all non-content elements before text extraction
+  $("script, style, noscript, nav, footer, header, aside, iframe, [type='text/css'], [type='text/javascript']").remove();
+  // Remove common ad / sidebar / toolbar wrappers
+  $("[id*='ad'], [class*='ad-'], [class*='sidebar'], [class*='toolbar'], [class*='topnav'], [class*='header'], [class*='footer'], [class*='cookie'], [class*='banner'], [role='navigation'], [role='banner']").remove();
+
+  // Extract text only from semantic content elements to avoid nav dumps / JSON injections
+  const contentSelectors = "main, article, [role='main'], #main, #content, .content, .main";
+  const $container = $(contentSelectors).first().length
+    ? $(contentSelectors).first()
+    : $("body");
+
+  const sentences: string[] = [];
+  $container.find("p, li, td, th, blockquote, figcaption, h1, h2, h3, h4, h5, h6, dd, dt").each((_i, el) => {
+    const raw = $(el).text().replace(/\s+/g, " ").trim();
+    if (!raw || raw.length < 5) return;
+    // Skip lines that look like JSON key-value pairs
+    if (/^["']?\w+["']?\s*:\s*["'\[{]/.test(raw)) return;
+    // Skip lines that are mostly URL-encoded text (%XX sequences)
+    if ((raw.match(/%[0-9A-Fa-f]{2}/g)?.length ?? 0) > 3) return;
+    // Skip lines that look like CSS selectors or JS
+    if (/^\s*[\w\-.#]+\s*\{/.test(raw)) return;
+    // Skip lines that are just a list of short words/punctuation (nav menus)
+    const words = raw.split(/\s+/);
+    if (words.length <= 6 && words.every(w => w.length <= 6)) return;
+    sentences.push(raw);
   });
-  const rawBodyText = $("body").text();
-  // Strip any residual HTML tags and CSS-looking lines that slipped through
-  const bodyText = rawBodyText
-    .replace(/<[^>]{0,200}>/g, " ")           // strip HTML tags
-    .replace(/\{[^}]{0,500}\}/g, " ")          // strip CSS/JS blocks { ... }
-    .replace(/https?:\/\/[^\s]{0,300}/g, " ")  // strip bare URLs cluttering the text
+
+  const bodyText = sentences
+    .join(" ")
+    .replace(/<[^>]{0,200}>/g, " ")   // strip any residual HTML tags
     .replace(/\s+/g, " ")
     .trim()
     .slice(0, 2000);
