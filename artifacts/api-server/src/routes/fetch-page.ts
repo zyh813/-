@@ -42,8 +42,16 @@ export function parseHtml(body: string, baseUrl: string) {
     if (/^["']?\w+["']?\s*:\s*["'\[{]/.test(raw)) return false;
     // Mostly URL-encoded (%XX) content
     if ((raw.match(/%[0-9A-Fa-f]{2}/g)?.length ?? 0) > 3) return false;
-    // CSS selector blocks
-    if (/^\s*[\w\-.#*>]+\s*\{/.test(raw)) return false;
+    // CSS selector at start of line
+    if (/^\s*[\w\-.#*>[\]:,() ]+\s*\{/.test(raw)) return false;
+    // Lines with 2+ CSS selector blocks anywhere (e.g. "body{...} a{...}")
+    if ((raw.match(/[\w\-.#*[\] ]+\s*\{/g)?.length ?? 0) >= 2) return false;
+    // CSS property density — 2+ known CSS props with colon
+    const cssProps = (raw.match(/\b(?:font-size|font-family|color|margin|padding|display|background|position|width|height|border|overflow|line-height|opacity|z-index|cursor|float|clear|content|transition|transform|animation|flex|grid|visibility|pointer-events)\s*[：:]/gi)?.length ?? 0);
+    if (cssProps >= 2) return false;
+    // High ratio of CSS/code syntax characters { } ; in the text
+    const syntaxCount = (raw.match(/[{};]/g)?.length ?? 0);
+    if (syntaxCount >= 4 && syntaxCount / raw.length > 0.03) return false;
     // Pure URL lines
     if (/^https?:\/\/\S+$/.test(raw)) return false;
     return true;
