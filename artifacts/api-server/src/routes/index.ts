@@ -4,6 +4,7 @@ import fetchPageRouter from "./fetch-page";
 import fetchPagesRouter from "./fetch-pages";
 import proxiesRouter from "./proxies";
 import trafficRouter from "./traffic";
+import alertsRouter from "./alerts";
 
 const router: IRouter = Router();
 
@@ -12,5 +13,6 @@ router.use(fetchPageRouter);
 router.use(fetchPagesRouter);
 router.use(proxiesRouter);
 router.use(trafficRouter);
+router.use(alertsRouter);
 
 export default router;

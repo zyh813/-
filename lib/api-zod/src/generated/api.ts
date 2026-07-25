@@ -244,6 +244,48 @@ export const GetTrafficEntryResponse = zod.object({
 });
 
 /**
+ * @summary Get alert configuration
+ */
+export const GetAlertConfigResponse = zod.object({
+  webhookUrl: zod.string().nullish(),
+  onOffline: zod.boolean(),
+  onRecovery: zod.boolean(),
+  latencyThresholdMs: zod.number().nullish(),
+  cooldownMinutes: zod.number(),
+});
+
+/**
+ * @summary Update alert configuration
+ */
+export const UpdateAlertConfigBody = zod.object({
+  webhookUrl: zod.string().nullish(),
+  onOffline: zod.boolean(),
+  onRecovery: zod.boolean(),
+  latencyThresholdMs: zod.number().nullish(),
+  cooldownMinutes: zod.number(),
+});
+
+export const UpdateAlertConfigResponse = zod.object({
+  webhookUrl: zod.string().nullish(),
+  onOffline: zod.boolean(),
+  onRecovery: zod.boolean(),
+  latencyThresholdMs: zod.number().nullish(),
+  cooldownMinutes: zod.number(),
+});
+
+/**
+ * @summary Send a test alert to a webhook URL
+ */
+export const TestAlertWebhookBody = zod.object({
+  webhookUrl: zod.string(),
+});
+
+export const TestAlertWebhookResponse = zod.object({
+  success: zod.boolean(),
+  message: zod.string(),
+});
+
+/**
  * @summary Delete a proxy by ID
  */
 export const DeleteProxyParams = zod.object({

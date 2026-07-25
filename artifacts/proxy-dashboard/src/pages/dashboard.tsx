@@ -23,10 +23,14 @@ import {
   useListTraffic,
   useClearTraffic,
   useGetProxyLatencyHistory,
+  useGetAlertConfig,
+  useUpdateAlertConfig,
+  useTestAlertWebhook,
   getListTrafficQueryKey,
   getListProxiesQueryKey,
   getGetSchedulerStatusQueryKey,
   getGetProxyLatencyHistoryQueryKey,
+  getGetAlertConfigQueryKey,
 } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -73,6 +77,8 @@ import {
   Tag,
   Radio,
   Filter,
+  Bell,
+  BellOff,
 } from "lucide-react";
 
 function StatCard({
@@ -482,6 +488,15 @@ export default function Dashboard() {
   const [trafficPage, setTrafficPage] = useState(0);
   const [activeTab, setActiveTab] = useState("proxies");
 
+  // Alert config form state
+  const [alertWebhookUrl, setAlertWebhookUrl] = useState("");
+  const [alertOnOffline, setAlertOnOffline] = useState(true);
+  const [alertOnRecovery, setAlertOnRecovery] = useState(true);
+  const [alertLatencyThreshold, setAlertLatencyThreshold] = useState("");
+  const [alertCooldown, setAlertCooldown] = useState("30");
+  const [alertConfigSynced, setAlertConfigSynced] = useState(false);
+  const [testingAlert, setTestingAlert] = useState(false);
+
   const handleSetPreferred = (id: string | null) => {
     setPreferredProxyId(id);
     if (id) localStorage.setItem("preferredProxyId", id);
@@ -499,12 +514,23 @@ export default function Dashboard() {
 
   const { data: proxiesData, isLoading: proxiesLoading, refetch: refetchProxies } = useListProxies();
   const { data: schedulerData, refetch: refetchScheduler } = useGetSchedulerStatus();
+  const { data: alertConfigData } = useGetAlertConfig({ query: { queryKey: getGetAlertConfigQueryKey() } });
 
   // 从服务端同步 autoClearDead 状态（仅首次加载时）
   const [autoClearDeadSynced, setAutoClearDeadSynced] = useState(false);
   if (schedulerData && !autoClearDeadSynced) {
     setAutoClearDead(schedulerData.autoClearDead ?? false);
     setAutoClearDeadSynced(true);
+  }
+
+  // 从服务端同步报警配置（仅首次加载时）
+  if (alertConfigData && !alertConfigSynced) {
+    setAlertWebhookUrl(alertConfigData.webhookUrl ?? "");
+    setAlertOnOffline(alertConfigData.onOffline);
+    setAlertOnRecovery(alertConfigData.onRecovery);
+    setAlertLatencyThreshold(alertConfigData.latencyThresholdMs != null ? String(alertConfigData.latencyThresholdMs) : "");
+    setAlertCooldown(String(alertConfigData.cooldownMinutes));
+    setAlertConfigSynced(true);
   }
 
   const invalidate = () => {
@@ -606,6 +632,51 @@ export default function Dashboard() {
       },
     },
   });
+
+  const updateAlertConfigMutation = useUpdateAlertConfig({
+    mutation: {
+      onSuccess: () => {
+        toast({ title: "报警配置已保存" });
+        queryClient.invalidateQueries({ queryKey: getGetAlertConfigQueryKey() });
+      },
+      onError: () => toast({ title: "保存失败", variant: "destructive" }),
+    },
+  });
+
+  const handleSaveAlertConfig = () => {
+    updateAlertConfigMutation.mutate({
+      data: {
+        webhookUrl: alertWebhookUrl.trim() || null,
+        onOffline: alertOnOffline,
+        onRecovery: alertOnRecovery,
+        latencyThresholdMs: alertLatencyThreshold ? Number(alertLatencyThreshold) : null,
+        cooldownMinutes: Number(alertCooldown) || 30,
+      },
+    });
+  };
+
+  const testAlertMutation = useTestAlertWebhook({
+    mutation: {
+      onSuccess: (data) => {
+        setTestingAlert(false);
+        if (data.success) {
+          toast({ title: "测试成功", description: data.message });
+        } else {
+          toast({ title: "测试失败", description: data.message, variant: "destructive" });
+        }
+      },
+      onError: () => { setTestingAlert(false); toast({ title: "发送失败", variant: "destructive" }); },
+    },
+  });
+
+  const handleTestAlert = () => {
+    if (!alertWebhookUrl.trim()) {
+      toast({ title: "请先填写 Webhook URL", variant: "destructive" });
+      return;
+    }
+    setTestingAlert(true);
+    testAlertMutation.mutate({ data: { webhookUrl: alertWebhookUrl.trim() } });
+  };
 
   const handleAddSingle = () => {
     if (!singleUrl.trim()) return;
@@ -774,12 +845,13 @@ export default function Dashboard() {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="w-full mb-4 grid grid-cols-5">
+          <TabsList className="w-full mb-4 grid grid-cols-6">
             <TabsTrigger value="proxies" className="text-xs">代理池</TabsTrigger>
             <TabsTrigger value="add" className="text-xs">添加</TabsTrigger>
             <TabsTrigger value="fetch" className="text-xs">抓取</TabsTrigger>
             <TabsTrigger value="traffic" className="text-xs">抓包</TabsTrigger>
             <TabsTrigger value="scheduler" className="text-xs">定时</TabsTrigger>
+            <TabsTrigger value="alerts" className="text-xs">报警</TabsTrigger>
           </TabsList>
 
           <TabsContent value="proxies" className="space-y-3">
@@ -1553,6 +1625,123 @@ export default function Dashboard() {
                 立即
               </Button>
             </div>
+          </TabsContent>
+
+          <TabsContent value="alerts" className="space-y-4">
+            <Card>
+              <CardHeader className="pb-2 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Bell className="w-4 h-4" />
+                  报警通知配置
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Webhook URL</label>
+                  <Input
+                    value={alertWebhookUrl}
+                    onChange={(e) => setAlertWebhookUrl(e.target.value)}
+                    placeholder="https://api.telegram.org/bot<TOKEN>/sendMessage?chat_id=<ID>"
+                    className="h-9 text-xs font-mono"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    支持 Telegram Bot（填写 sendMessage URL）或通用 Webhook（POST JSON）
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <label className="text-xs font-medium text-muted-foreground">触发条件</label>
+
+                  <div
+                    className="flex items-center justify-between rounded-lg border px-3 py-2.5 cursor-pointer select-none"
+                    onClick={() => setAlertOnOffline((v) => !v)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <BellOff className="w-4 h-4 text-red-500" />
+                      <div>
+                        <p className="text-sm font-medium">代理离线</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">代理由存活变为失效时通知</p>
+                      </div>
+                    </div>
+                    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${alertOnOffline ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${alertOnOffline ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </div>
+                  </div>
+
+                  <div
+                    className="flex items-center justify-between rounded-lg border px-3 py-2.5 cursor-pointer select-none"
+                    onClick={() => setAlertOnRecovery((v) => !v)}
+                  >
+                    <div className="flex items-center gap-2">
+                      <Bell className="w-4 h-4 text-green-500" />
+                      <div>
+                        <p className="text-sm font-medium">代理恢复</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">代理从失效恢复为存活时通知</p>
+                      </div>
+                    </div>
+                    <div className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${alertOnRecovery ? "bg-primary" : "bg-muted-foreground/30"}`}>
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${alertOnRecovery ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">延迟报警阈值（ms，留空禁用）</label>
+                  <Input
+                    type="number"
+                    min="0"
+                    placeholder="例如 3000（超过此值触发报警）"
+                    value={alertLatencyThreshold}
+                    onChange={(e) => setAlertLatencyThreshold(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">报警冷却时间（分钟）</label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={alertCooldown}
+                    onChange={(e) => setAlertCooldown(e.target.value)}
+                    className="h-9 text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">同一代理两次报警之间的最短间隔，防止刷屏</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-9"
+                    onClick={handleTestAlert}
+                    disabled={testingAlert || !alertWebhookUrl.trim()}
+                  >
+                    <Zap className="w-3.5 h-3.5 mr-1" />
+                    {testingAlert ? "发送中…" : "测试通知"}
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="h-9"
+                    onClick={handleSaveAlertConfig}
+                    disabled={updateAlertConfigMutation.isPending}
+                  >
+                    <Check className="w-3.5 h-3.5 mr-1" />
+                    {updateAlertConfigMutation.isPending ? "保存中…" : "保存配置"}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {alertConfigData?.webhookUrl && (
+              <div className="rounded-lg border border-green-200 bg-green-50 dark:bg-green-950/20 px-4 py-3 flex items-start gap-2">
+                <Bell className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                <div className="space-y-0.5">
+                  <p className="text-sm font-medium text-green-800 dark:text-green-400">报警已启用</p>
+                  <p className="text-xs text-green-700 dark:text-green-500 font-mono break-all">{alertConfigData.webhookUrl}</p>
+                </div>
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>

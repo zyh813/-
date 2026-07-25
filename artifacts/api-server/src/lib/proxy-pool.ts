@@ -4,6 +4,13 @@ import {
   deleteAllProxiesFromDb,
   updateProxyStatsInDb,
 } from "./proxy-db";
+import { triggerAlert, type AlertEvent } from "./alert-sender";
+
+type AlertCallback = (event: AlertEvent, entry: ProxyEntry, latencyMs?: number) => void;
+let alertCallback: AlertCallback | null = null;
+export function registerAlertCallback(cb: AlertCallback): void {
+  alertCallback = cb;
+}
 
 export interface ProxyEntry {
   id: string;
@@ -177,6 +184,7 @@ export function recordFailure(id: string): void {
 export function markAlive(id: string, latencyMs: number): void {
   const entry = pool.proxies.get(id);
   if (!entry) return;
+  const wasDeadBefore = !entry.alive;
   entry.alive = true;
   entry.consecutiveFails = 0;
   entry.latencyMs = latencyMs;
@@ -188,17 +196,27 @@ export function markAlive(id: string, latencyMs: number): void {
     latencyMs,
     lastCheckedAt: entry.lastCheckedAt,
   }).catch(() => {});
+  // Fire alert: recovery first (higher priority than latency spike)
+  if (wasDeadBefore) {
+    triggerAlert("recovery", entry, latencyMs).catch(() => {});
+  } else {
+    triggerAlert("latency_spike", entry, latencyMs).catch(() => {});
+  }
 }
 
 export function markDead(id: string): void {
   const entry = pool.proxies.get(id);
   if (!entry) return;
+  const wasAliveBefore = entry.alive;
   entry.alive = false;
   entry.lastCheckedAt = new Date().toISOString();
   updateProxyStatsInDb(id, {
     alive: false,
     lastCheckedAt: entry.lastCheckedAt,
   }).catch(() => {});
+  if (wasAliveBefore) {
+    triggerAlert("offline", entry).catch(() => {});
+  }
 }
 
 export function pickProxy(

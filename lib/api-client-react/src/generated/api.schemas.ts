@@ -13,6 +13,19 @@ export interface ErrorResponse {
   error: string;
 }
 
+export interface AlertConfig {
+  webhookUrl?: string | null;
+  onOffline: boolean;
+  onRecovery: boolean;
+  latencyThresholdMs?: number | null;
+  cooldownMinutes: number;
+}
+
+export interface AlertTestResult {
+  success: boolean;
+  message: string;
+}
+
 export interface LatencyPoint {
   timestamp: string;
   latencyMs: number;
@@ -144,6 +157,10 @@ export type ListTraffic200 = {
   total: number;
   entries: TrafficEntry[];
   stats: TrafficStats;
+};
+
+export type TestAlertWebhookBody = {
+  webhookUrl: string;
 };
 
 export type GetProxyLatencyHistory200 = {
