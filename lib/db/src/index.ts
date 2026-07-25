@@ -10,7 +10,17 @@ if (!process.env.DATABASE_URL) {
   );
 }
 
-export const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+// Use explicit SSL config to suppress pg's sslmode deprecation warning.
+// Local / non-SSL connections (localhost / no sslmode in URL) skip SSL entirely.
+const isLocalDb =
+  process.env.DATABASE_URL?.includes("localhost") ||
+  process.env.DATABASE_URL?.includes("127.0.0.1") ||
+  !process.env.DATABASE_URL?.includes("sslmode");
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: isLocalDb ? false : { rejectUnauthorized: true },
+});
 export const db = drizzle(pool, { schema });
 
 export * from "./schema";
