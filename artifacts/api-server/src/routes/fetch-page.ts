@@ -35,7 +35,21 @@ export function parseHtml(body: string, baseUrl: string) {
   // Remove common ad / sidebar / toolbar wrappers
   $("[id*='ad'], [class*='ad-'], [class*='sidebar'], [class*='toolbar'], [class*='topnav'], [class*='header'], [class*='footer'], [class*='cookie'], [class*='banner'], [role='navigation'], [role='banner']").remove();
 
-  // Extract text only from semantic content elements to avoid nav dumps / JSON injections
+  // Shared line filter applied to every extracted text chunk
+  function isUsableLine(raw: string): boolean {
+    if (!raw || raw.length < 8) return false;
+    // JSON key-value fragments
+    if (/^["']?\w+["']?\s*:\s*["'\[{]/.test(raw)) return false;
+    // Mostly URL-encoded (%XX) content
+    if ((raw.match(/%[0-9A-Fa-f]{2}/g)?.length ?? 0) > 3) return false;
+    // CSS selector blocks
+    if (/^\s*[\w\-.#*>]+\s*\{/.test(raw)) return false;
+    // Pure URL lines
+    if (/^https?:\/\/\S+$/.test(raw)) return false;
+    return true;
+  }
+
+  // Step 1: try semantic paragraph elements inside a content container
   const contentSelectors = "main, article, [role='main'], #main, #content, .content, .main";
   const $container = $(contentSelectors).first().length
     ? $(contentSelectors).first()
@@ -44,18 +58,18 @@ export function parseHtml(body: string, baseUrl: string) {
   const sentences: string[] = [];
   $container.find("p, li, td, th, blockquote, figcaption, h1, h2, h3, h4, h5, h6, dd, dt").each((_i, el) => {
     const raw = $(el).text().replace(/\s+/g, " ").trim();
-    if (!raw || raw.length < 5) return;
-    // Skip lines that look like JSON key-value pairs
-    if (/^["']?\w+["']?\s*:\s*["'\[{]/.test(raw)) return;
-    // Skip lines that are mostly URL-encoded text (%XX sequences)
-    if ((raw.match(/%[0-9A-Fa-f]{2}/g)?.length ?? 0) > 3) return;
-    // Skip lines that look like CSS selectors or JS
-    if (/^\s*[\w\-.#]+\s*\{/.test(raw)) return;
-    // Skip lines that are just a list of short words/punctuation (nav menus)
-    const words = raw.split(/\s+/);
-    if (words.length <= 6 && words.every(w => w.length <= 6)) return;
-    sentences.push(raw);
+    if (isUsableLine(raw)) sentences.push(raw);
   });
+
+  // Step 2: fallback — if semantic extraction yielded too little, take all body text and split into lines
+  if (sentences.join("").length < 100) {
+    const allText = $("body").text();
+    // Split on newlines and Chinese sentence enders, then filter each chunk
+    allText.split(/[\n\r。！？.!?]/).forEach(chunk => {
+      const raw = chunk.replace(/\s+/g, " ").trim();
+      if (isUsableLine(raw)) sentences.push(raw);
+    });
+  }
 
   const bodyText = sentences
     .join(" ")
