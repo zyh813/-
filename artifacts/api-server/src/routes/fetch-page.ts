@@ -30,8 +30,23 @@ export function parseHtml(body: string, baseUrl: string) {
     if (text) headings.push({ level: el.tagName.toLowerCase(), text });
   });
 
-  $("script, style, noscript, nav, footer, header").remove();
-  const bodyText = $("body").text().replace(/\s+/g, " ").trim().slice(0, 2000);
+  $("script, style, noscript, nav, footer, header, [type='text/css'], [type='text/javascript']").remove();
+  // Remove elements whose text looks like embedded CSS/JS (e.g. Baidu injects style blocks as text nodes)
+  $("*").each((_i, el) => {
+    const text = $(el).clone().children().remove().end().text().trim();
+    if (/^\s*[\w\-]+\s*\{/.test(text) || /^\s*<style/i.test(text) || /^\s*<script/i.test(text)) {
+      $(el).empty();
+    }
+  });
+  const rawBodyText = $("body").text();
+  // Strip any residual HTML tags and CSS-looking lines that slipped through
+  const bodyText = rawBodyText
+    .replace(/<[^>]{0,200}>/g, " ")           // strip HTML tags
+    .replace(/\{[^}]{0,500}\}/g, " ")          // strip CSS/JS blocks { ... }
+    .replace(/https?:\/\/[^\s]{0,300}/g, " ")  // strip bare URLs cluttering the text
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 2000);
 
   return { title, metaDescription, headings, links: links.slice(0, 50), bodyText };
 }

@@ -449,10 +449,16 @@ function FetchResultView({ result, durationMs }: { result: FetchResult; duration
           {showLinks && (
             <div className="border-t divide-y max-h-52 overflow-y-auto">
               {result.parsed.links.slice(0, 30).map((link, i) => (
-                <div key={i} className="px-3 py-1.5">
-                  <p className="text-xs font-medium line-clamp-1">{link.text}</p>
-                  <p className="text-xs text-muted-foreground truncate">{link.href}</p>
-                </div>
+                <a
+                  key={i}
+                  href={link.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3 py-1.5 flex flex-col hover:bg-muted/50 transition-colors"
+                >
+                  <span className="text-xs font-medium line-clamp-1 text-foreground">{link.text}</span>
+                  <span className="text-xs text-blue-500 truncate hover:underline">{link.href}</span>
+                </a>
               ))}
             </div>
           )}
